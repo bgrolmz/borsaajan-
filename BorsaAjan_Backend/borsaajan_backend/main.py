@@ -1908,8 +1908,8 @@ def market_overview():
 
 GENEL PİYASA VERİLERİ:
 {market_context}
-VIX (Korku Endeksi): {vix_value:.2f if vix_value else 'N/A'}
-DXY (Dolar Endeksi): {dxy_value:.2f if dxy_value else 'N/A'}
+VIX (Korku Endeksi): {f"{vix_value:.2f}" if vix_value is not None else "N/A"}
+DXY (Dolar Endeksi): {f"{dxy_value:.2f}" if dxy_value is not None else "N/A"}
 
 KULLANICININ PORTFÖYÜ: {portfolio_list}
 {portfolio_context}
@@ -2046,7 +2046,9 @@ def webhook_news_signal(
         llm = analyze_news_with_gemini(symbol, haber)
 
         if not llm:
-            raise HTTPException(status_code=503, detail=f"Gemini API analiz döndürmedi: {symbol}")
+            import logging as _log
+            _log.error(f"[webhook] Gemini analiz döndürmedi: {symbol}")
+            return {"status": "skipped", "reason": f"Gemini analiz döndürmedi: {symbol}"}
 
         raw_impact = (llm.get("impact") or "").lower()
         impact = "POSITIVE" if "bullish" in raw_impact else ("NEGATIVE" if "bearish" in raw_impact else "NEUTRAL")
@@ -2145,10 +2147,10 @@ def webhook_news_signal(
         }
 
     except Exception as e:
+        import logging as _log
         import traceback
-        print(f"❌ [webhook] Hata — {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Webhook işleme hatası: {str(e)}")
+        _log.error(f"[webhook] Hata — {e}\n{traceback.format_exc()}")
+        return {"status": "skipped", "reason": str(e)}
 
 
 @app.get("/news/history/all")

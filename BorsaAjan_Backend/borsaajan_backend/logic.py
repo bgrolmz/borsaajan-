@@ -81,7 +81,7 @@ def _discover_model(client, prefer_flash: bool = True) -> Optional[str]:
     
     try:
         # Fast path: try preferred model first without iterating all models
-        preferred = "gemini-2.0-flash"
+        preferred = "gemini-1.5-flash"
         try:
             model_info = client.models.get(model=preferred)
             if model_info and "generateContent" in model_info.supported_actions:
@@ -939,7 +939,7 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
 
     import google.generativeai as genai_old
     genai_old.configure(api_key=_GOOGLE_API_KEY)
-    model = genai_old.GenerativeModel("gemini-2.0-flash")
+    model = genai_old.GenerativeModel("gemini-1.5-flash")
 
     time.sleep(3)
 
