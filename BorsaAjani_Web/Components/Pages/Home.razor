@@ -5531,9 +5531,12 @@
         }
         else if (tab == "Portföy")
         {
-            // Load portfolio and watchlist when switching to portfolio tab
-            _ = LoadPortfolio();
-            _ = LoadWatchlist();
+            _ = InvokeAsync(async () => {
+                await LoadPortfolio();
+                await LoadWatchlist();
+                RecalcPortfolioTotals();
+                StateHasChanged();
+            });
         }
         else if (tab == "Geçmiş")
         {
@@ -5630,7 +5633,9 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadPortfolio();
-        LoadSampleNews(); // Load sample news on initialization
+        await LoadWatchlist();
+        RecalcPortfolioTotals();
+        _ = LoadRecentNews();
     }
     
     // Educational Tooltips Dictionary
@@ -6340,10 +6345,77 @@
         finally
         {
             isLoadingWatchlist = false;
+            RecalcPortfolioTotals();
             StateHasChanged();
         }
     }
-    
+
+    private void RecalcPortfolioTotals()
+    {
+        totalCost = portfolioItems.Sum(p => p.Quantity * p.AvgCost);
+        totalValue = portfolioItems.Sum(p => {
+            var w = watchlistItems.FirstOrDefault(w => w.Symbol == p.Symbol);
+            return w != null && w.Price > 0 ? p.Quantity * w.Price : p.Quantity * p.AvgCost;
+        });
+        totalPnL = totalValue - totalCost;
+        totalPnLPercent = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
+    }
+
+    private async Task LoadRecentNews()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("BackendApi");
+            var response = await client.GetAsync("/news/history/all?limit=20");
+            if (!response.IsSuccessStatusCode) { LoadSampleNews(); return; }
+            var json = await response.Content.ReadAsStringAsync();
+            var data = JsonSerializer.Deserialize<JsonElement>(json);
+            if (!data.TryGetProperty("history", out var histArray) || histArray.GetArrayLength() == 0)
+            {
+                LoadSampleNews();
+                return;
+            }
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            newsItems.Clear();
+            foreach (var item in histArray.EnumerateArray())
+            {
+                var impactRaw = item.TryGetProperty("impact", out var imp) ? imp.GetString() ?? "" : "";
+                var impactUpper = impactRaw.ToUpper();
+                string impact = impactUpper switch
+                {
+                    "POSITIVE" or "BULLISH" => "HIGH",
+                    "NEGATIVE" or "BEARISH" => "MEDIUM",
+                    _ => "LOW"
+                };
+                string sentiment = impactUpper switch
+                {
+                    "POSITIVE" or "BULLISH" => "bullish",
+                    "NEGATIVE" or "BEARISH" => "bearish",
+                    _ => "neutral"
+                };
+                var sym = item.TryGetProperty("symbol", out var symEl) ? symEl.GetString() ?? "" : "";
+                newsItems.Add(new NewsItem
+                {
+                    Id = item.TryGetProperty("id", out var nid) ? nid.GetInt32() : 0,
+                    Title = item.TryGetProperty("title", out var title) ? title.GetString() ?? sym : sym,
+                    Reason = item.TryGetProperty("reason", out var reason) ? reason.GetString() ?? "" : "",
+                    WhyAnalysis = item.TryGetProperty("comment", out var cmt) ? cmt.GetString() ?? "" : "",
+                    Summary = item.TryGetProperty("advice", out var adv) ? adv.GetString() ?? "" : "",
+                    Impact = impact,
+                    Sentiment = sentiment,
+                    Confidence = item.TryGetProperty("confidence", out var conf) && conf.ValueKind == JsonValueKind.Number ? conf.GetInt32() : 70,
+                    Symbols = !string.IsNullOrEmpty(sym) ? new List<string> { sym } : new List<string>(),
+                    Timestamp = item.TryGetProperty("created_at", out var ts) && DateTime.TryParse(ts.GetString(), out var dt) ? dt : DateTime.Now.AddMinutes(-60)
+                });
+            }
+            StateHasChanged();
+        }
+        catch
+        {
+            LoadSampleNews();
+        }
+    }
+
     private async Task OpenAddWatchlistDialog()
     {
         var symbol = await JSRuntime.InvokeAsync<string>("prompt", "Hisse sembolünü girin (örn: AAPL):");
