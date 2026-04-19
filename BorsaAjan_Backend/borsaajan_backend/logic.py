@@ -941,6 +941,20 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
     if not client:
         return None
 
+    model_name = None
+    for m in client.models.list():
+        name = getattr(m, "name", "") or ""
+        if "flash" in name.lower() and "generateContent" in (getattr(m, "supported_actions", None) or []):
+            model_name = name
+            break
+    if not model_name:
+        for m in client.models.list():
+            if "generateContent" in (getattr(m, "supported_actions", None) or []):
+                model_name = getattr(m, "name", None)
+                break
+    if not model_name:
+        raise RuntimeError("Kullanılabilir Gemini modeli bulunamadı")
+
     time.sleep(3)
 
     config = genai_types.GenerateContentConfig(
@@ -951,7 +965,7 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
 
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model=model_name,
             contents=prompt,
             config=config,
         )
