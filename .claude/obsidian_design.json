@@ -1,0 +1,79 @@
+{
+  "project_name": "Obsidian Terminal - Financial Intelligence Suite",
+  "version": "1.0.0",
+  "design_system": {
+    "name": "Obsidian Terminal",
+    "theme": {
+      "color_mode": "DARK",
+      "colors": {
+        "primary": "#00FFA3",
+        "background": "#0b1326",
+        "surface": "#171f33",
+        "accent": "#dae2fd",
+        "danger": "#ff4d4d",
+        "warning": "#ffcc00"
+      },
+      "typography": {
+        "primary_font": "Manrope",
+        "scale": "Kinetic"
+      },
+      "shapes": {
+        "roundness": "ROUND_FOUR"
+      }
+    }
+  },
+  "screens": [
+    {
+      "id": "SCREEN_10",
+      "title": "NVDA Deep Analysis - Variant 1 (Score-Focused)",
+      "description": "Deep dive analysis focused on the Argus Kararı score with detailed fundamental metrics.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_10}}"
+    },
+    {
+      "id": "SCREEN_12",
+      "title": "Whale Tracker & Institutional Flow",
+      "description": "Monitoring institutional activity, dark pool trades, and whale intensity heatmaps.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_12}}"
+    },
+    {
+      "id": "SCREEN_3",
+      "title": "Portfolio Hub",
+      "description": "Asset intelligence table with collective report generation capabilities.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_3}}"
+    },
+    {
+      "id": "SCREEN_19",
+      "title": "Analysis History & Audit Log",
+      "description": "Chronological ledger of past AI decisions and audit integrity verification.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_19}}"
+    },
+    {
+      "id": "SCREEN_15",
+      "title": "Analyst Insights & Signal Hub",
+      "description": "Deciphering news into actionable advice and aggregating analyst consensus.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_15}}"
+    },
+    {
+      "id": "SCREEN_16",
+      "title": "Watchlist Command Center",
+      "description": "Active tracking board with live AI Pulse indicators for selected assets.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_16}}"
+    },
+    {
+      "id": "SCREEN_14",
+      "title": "Intelligence Feed",
+      "description": "News aggregator with AI-driven sentiment analysis.",
+      "placeholder": "{{DATA:SCREEN:SCREEN_14}}"
+    }
+  ],
+  "shared_components": [
+    {
+      "name": "TopNavBar",
+      "features": ["Ticker Tape", "Global Search", "Profile", "Notifications"]
+    },
+    {
+      "name": "SideNavBar",
+      "features": ["Navigation Tabs", "AI Assistant CTA", "Status Indicators"]
+    }
+  ]
+}

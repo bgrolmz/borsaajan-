@@ -1,0 +1,14 @@
+.sim{background: rgba(22,27,34,.45); border:1px solid rgba(48,54,61,.55); border-radius: 16px; padding: 16px}
+.sim__title{font-weight: 750; color:#e6edf3}
+.sim__subtitle{font-size:.85rem; color: rgba(255,255,255,.62); margin-top: 4px; margin-bottom: 12px}
+
+.sim__grid{display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px}
+.sim__kpi{background: rgba(13,17,23,.55); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px}
+.sim__kpiLabel{font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color: rgba(255,255,255,.55)}
+.sim__kpiValue{margin-top: 8px; font-weight: 800; color:#e6edf3; font-size: 1.2rem}
+
+.sim__note{margin-top: 12px; padding: 12px; border-radius: 14px; background: rgba(88,166,255,.08); border:1px solid rgba(88,166,255,.18); color: rgba(255,255,255,.82); line-height: 1.4}
+
+@media (max-width: 900px){
+  .sim__grid{grid-template-columns: 1fr}
+}

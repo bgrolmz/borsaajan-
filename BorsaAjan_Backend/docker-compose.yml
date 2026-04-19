@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: borsa_ajan_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/borsa.db
+      - TZ=${TZ:-Europe/Istanbul}
+      - QUICK_SCHEDULE_TIMES=${QUICK_SCHEDULE_TIMES:-09:00,21:00}
+      - NEWS_INTERVAL_MINUTES=${NEWS_INTERVAL_MINUTES:-15}
+      - BACKUP_KEEP_DAYS=${BACKUP_KEEP_DAYS:-14}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - borsa_network
+
+networks:
+  borsa_network:
+    driver: bridge

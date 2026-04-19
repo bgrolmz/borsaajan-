@@ -1,0 +1,31 @@
+@page "/test"
+@rendermode InteractiveServer
+
+<h1>Test Page</h1>
+<p>Button Test: <strong>@counter</strong></p>
+<button @onclick="IncrementCount" class="btn btn-primary">Click Me</button>
+<p>Last clicked: @lastClickTime</p>
+<p>SignalR Status: <strong>@signalRStatus</strong></p>
+
+@code {
+    private int counter = 0;
+    private string lastClickTime = "Never";
+    private string signalRStatus = "Unknown";
+    
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            signalRStatus = "Rendered";
+            StateHasChanged();
+        }
+    }
+    
+    private void IncrementCount()
+    {
+        counter++;
+        lastClickTime = DateTime.Now.ToString("HH:mm:ss");
+        Console.WriteLine($"Button clicked! Counter: {counter}");
+        StateHasChanged();
+    }
+}

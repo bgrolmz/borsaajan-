@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd.exe /c \"python -c \\\\\"import ast; ast.parse\\(open\\(r'c:\\\\\\\\Users\\\\\\\\msi-nb\\\\\\\\Desktop\\\\\\\\Borsa_Projem\\\\\\\\BorsaAjan_Backend\\\\\\\\borsaajan_backend\\\\\\\\logic.py'\\).read\\(\\)\\); print\\('OK'\\)\\\\\" 2>&1\")",
+      "Bash(cmd.exe /c \"cd C:\\\\\\\\Users\\\\\\\\msi-nb\\\\\\\\Desktop\\\\\\\\Borsa_Projem\\\\\\\\BorsaAjan_Backend && .venv\\\\\\\\Scripts\\\\\\\\python.exe -c \\\\\"import ast; ast.parse\\(open\\('borsaajan_backend/logic.py'\\).read\\(\\)\\); print\\('OK'\\)\\\\\" 2>&1\")",
+      "Bash(cmd.exe /c \"cd C:\\\\\\\\Users\\\\\\\\msi-nb\\\\\\\\Desktop\\\\\\\\Borsa_Projem\\\\\\\\BorsaAjan_Backend && .venv\\\\\\\\Scripts\\\\\\\\python.exe -c \\\\\"import ast; ast.parse\\(open\\('borsaajan_backend/logic.py'\\).read\\(\\)\\); print\\('OK'\\)\\\\\"\")"
+    ]
+  }
+}

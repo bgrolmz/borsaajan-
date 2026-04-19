@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c \"py -m py_compile c:\\\\Users\\\\msi-nb\\\\Desktop\\\\Borsa_Projem\\\\BorsaAjan_Backend\\\\borsaajan_backend\\\\logic.py 2>&1 && echo SYNTAX OK\")",
+      "Bash(dotnet build:*)",
+      "Bash(Select-String -Pattern \"error CS|Build succeeded|Build FAILED\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(grep -rn \"estimate_cost_usd\\\\|estimate_token_count\" c:Usersmsi-nbDesktopBorsa_ProjemBorsaAjan_Backendborsaajan_backend --include=*.py)",
+      "Bash(find c:Usersmsi-nbDesktopBorsa_ProjemBorsaAjan_Backend -name requirements*.txt -o -name pyproject.toml -o -name setup.py)",
+      "Bash(grep -rn model_name.*= c:Usersmsi-nbDesktopBorsa_ProjemBorsaAjan_Backendborsaajan_backend --include=*.py)",
+      "Bash(awk 'NR>=50 && NR<=65')",
+      "Bash(python -c \"from google.api_core import exceptions; print\\([x for x in dir\\(exceptions\\) if ''Error'' in x or ''Unavailable'' in x or ''Resource'' in x]\\)\")",
+      "Bash(where python3:*)",
+      "Bash(where python:*)",
+      "Read(//c/Users/msi-nb/anaconda3/**)",
+      "Bash(/c/Users/msi-nb/anaconda3/python.exe -c \"from google.api_core import exceptions; print\\([x for x in dir\\(exceptions\\) if ''Error'' in x or ''Unavailable'' in x or ''Resource'' in x or ''TooMany'' in x]\\)\")",
+      "Bash(\"c:/Users/msi-nb/Desktop/Borsa_Projem/BorsaAjan_Backend/venv/Scripts/python.exe\" -c \"from google.api_core import exceptions; e = exceptions.ServiceUnavailable\\(''test''\\); print\\(type\\(e\\).__mro__\\); print\\(hasattr\\(e, ''code''\\)\\); print\\(e.grpc_status_code if hasattr\\(e, ''grpc_status_code''\\) else ''no grpc_status_code''\\)\")",
+      "Bash(\"c:/Users/msi-nb/Desktop/Borsa_Projem/BorsaAjan_Backend/venv/Scripts/pip.exe\" list:*)",
+      "Bash(\"c:/Users/msi-nb/Desktop/Borsa_Projem/BorsaAjan_Backend/venv/Scripts/pip.exe\" freeze:*)",
+      "Bash(venv/Scripts/python.exe -m py_compile borsaajan_backend/database.py)",
+      "Bash(grep -E \"\\\\.py$\")"
+    ]
+  }
+}

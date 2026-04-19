@@ -1,0 +1,480 @@
+@page "/portfolio"
+@using System.Text.Json
+@using System.Globalization
+@using BorsaAjani_App.Models
+@implements IDisposable
+
+<div class="mentorPage">
+    <header class="mentorHeader">
+        <div class="mentorHeader__top">
+            <div class="mentorBrand">
+                <div class="mentorBrand__title">Portföy</div>
+                <div class="mentorBrand__subtitle">Tek karar • 3 eylem • Önce risk azalt</div>
+            </div>
+
+            <nav class="mentorNav">
+                <NavLink class="mentorNav__link" href="/" Match="NavLinkMatch.All">Tek varlık</NavLink>
+                <NavLink class="mentorNav__link" href="/portfolio">Portföy</NavLink>
+            </nav>
+        </div>
+
+        <div class="portControls">
+            <div class="portForm">
+                <label class="mentorInput">
+                    <div class="mentorInput__label">Sembol</div>
+                    <input class="mentorInput__control" @bind="newSymbol" placeholder="NVDA" />
+                </label>
+                <label class="mentorInput">
+                    <div class="mentorInput__label">Ortalama maliyet</div>
+                    <input class="mentorInput__control" @bind="newAvgCost" type="number" step="any" placeholder="176" />
+                </label>
+                <label class="mentorInput">
+                    <div class="mentorInput__label">Adet</div>
+                    <input class="mentorInput__control" @bind="newQty" type="number" step="any" placeholder="1" />
+                </label>
+
+                <button class="mentorAnalyze" @onclick="AddOrUpdate" disabled="@busy">Ekle/Güncelle</button>
+                <button class="portBtn" @onclick="RefreshPortfolio" disabled="@busy">Yenile</button>
+                <button class="mentorAnalyze" @onclick="Analyze" disabled="@busy || holdings.Count == 0">Mentor portföy analizi</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(status))
+            {
+                <div class="portStatus">@status</div>
+            }
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="mentorError">@error</div>
+    }
+
+    @if (holdings.Count == 0)
+    {
+        <div class="mentorEmpty">
+            <div class="mentorEmpty__title">Portföy boş.</div>
+            <div class="mentorEmpty__text">Üstte sembol, maliyet ve adet girip ekleyin. Sonra "Mentor portföy analizi" ile tek karar + eylem planı alın.</div>
+        </div>
+    }
+
+    @if (mentor is not null)
+    {
+        <div class="portLayout">
+            <div class="portTop">
+                <MentorCommandCenter
+                    Decision="mentor.Decision"
+                    DecisionSubLabel="@mentor.DecisionRaw"
+                    Confidence="mentor.Confidence"
+                    Horizon="@mentor.Horizon"
+                    WhyBullets="mentor.Why"
+                    ActionSteps="mentor.Actions"
+                    RiskNote="@mentor.RiskNote"
+                    ReevaluateTrigger="@mentor.Trigger" />
+            </div>
+
+            <div class="portPositions">
+                <div class="portSectionTitle">Pozisyon kartları</div>
+                <div class="portSectionHint">Her kart: karar + kısa neden + yüzde bazlı eylem.</div>
+
+                <div class="portCards">
+                    @foreach (var card in positionCards)
+                    {
+                        <PositionMentorCard
+                            Symbol="@card.Symbol"
+                            Decision="@card.Decision"
+                            Confidence="@card.Confidence"
+                            Horizon="@card.Horizon"
+                            WhyBullets="@card.Why"
+                            ActionSteps="@card.Actions"
+                            NewsLine="@card.NewsLine" />
+                    }
+                </div>
+            </div>
+
+            <EvidenceDrawer Title="Evidence (detay tablolar)" OpenByDefault="false" Rows="portfolioEvidenceRows">
+                <div class="portEvidenceExtra">
+                    <div class="portEvidenceNote">Not: Bu bölüm sadece sayısal kanıt içindir. Karar ve eylem planı yukarıdadır.</div>
+                </div>
+            </EvidenceDrawer>
+        </div>
+    }
+</div>
+
+@code {
+    private bool busy;
+    private string? error;
+    private string? status;
+
+    private string newSymbol = "";
+    private double newAvgCost = 0;
+    private double newQty = 0;
+
+    private List<PortfolioItemDto> holdings = new();
+
+    private PortfolioMentorVm? mentor;
+    private List<PositionCardVm> positionCards = new();
+    private List<EvidenceDrawer.EvidenceRow> portfolioEvidenceRows = new();
+
+    private JsonDocument? lastAnalyzeDoc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshPortfolio();
+    }
+
+    private async Task RefreshPortfolio()
+    {
+        busy = true;
+        error = null;
+        status = null;
+        mentor = null;
+        positionCards = new();
+        portfolioEvidenceRows = new();
+
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            var baseUrl = GetBaseUrl();
+
+            var resp = await client.GetAsync($"http://{baseUrl}:8000/portfolio/list");
+            if (!resp.IsSuccessStatusCode)
+            {
+                error = $"Portföy okunamadı: {resp.StatusCode}";
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var dto = JsonSerializer.Deserialize<PortfolioListResponse>(json, options);
+            holdings = dto?.Portfolio ?? new();
+
+            status = $"Portföy: {holdings.Count} pozisyon.";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddOrUpdate()
+    {
+        busy = true;
+        error = null;
+        status = null;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newSymbol) || newAvgCost <= 0 || newQty <= 0)
+            {
+                error = "Sembol, maliyet ve adet zorunlu (0'dan büyük).";
+                return;
+            }
+
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            var baseUrl = GetBaseUrl();
+
+            var payload = new { symbol = newSymbol.Trim().ToUpperInvariant(), avg_cost = newAvgCost, quantity = newQty };
+            var resp = await client.PostAsJsonAsync($"http://{baseUrl}:8000/portfolio/add", payload);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                error = $"Ekleme/Güncelleme başarısız: {resp.StatusCode}";
+                return;
+            }
+
+            status = "Kaydedildi.";
+            newSymbol = "";
+            newAvgCost = 0;
+            newQty = 0;
+
+            await RefreshPortfolio();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Analyze()
+    {
+        busy = true;
+        error = null;
+        status = null;
+        mentor = null;
+        positionCards = new();
+        portfolioEvidenceRows = new();
+
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(300) };
+            var baseUrl = GetBaseUrl();
+
+            var resp = await client.GetAsync($"http://{baseUrl}:8000/portfolio/analyze?mode=quick&detail=detailed");
+            if (!resp.IsSuccessStatusCode)
+            {
+                error = $"Analiz başarısız: {resp.StatusCode}";
+                return;
+            }
+
+            var json = await resp.Content.ReadAsStringAsync();
+            lastAnalyzeDoc?.Dispose();
+            lastAnalyzeDoc = JsonDocument.Parse(json);
+
+            BuildUiFromPortfolioJson(lastAnalyzeDoc.RootElement);
+
+            status = "Mentor analizi güncellendi.";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BuildUiFromPortfolioJson(JsonElement root)
+    {
+        var mentorEl = root.TryGetProperty("mentor");
+        if (mentorEl is null || mentorEl.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = "Mentor çıktısı bulunamadı.";
+            return;
+        }
+
+        var decisionRaw = mentorEl.Value.TryGetProperty("decision")?.GetStringOrNull() ?? "HOLD";
+        var decision = decisionRaw.ToUpperInvariant() switch
+        {
+            "BUY" => MentorDecision.Buy,
+            "REDUCE" => MentorDecision.Reduce,
+            "AVOID" => MentorDecision.Avoid,
+            _ => MentorDecision.Hold
+        };
+
+        var confidence = mentorEl.Value.TryGetProperty("confidence")?.GetIntOrNull() ?? 50;
+        var horizonDays = mentorEl.Value.TryGetProperty("horizon_days")?.GetIntOrNull() ?? 7;
+
+        var why = mentorEl.Value.TryGetProperty("why_tr")?.GetStringArray().Take(3).ToList() ?? new();
+        var plan = mentorEl.Value.TryGetProperty("plan_tr")?.GetStringArray().ToList() ?? new();
+        var reducePct = mentorEl.Value.TryGetProperty("reduce_pct")?.GetIntOrNull();
+
+        var actions = new List<string>();
+        if (decision == MentorDecision.Reduce && reducePct is not null)
+            actions.Add($"Azalt: REDUCE verilen pozisyonlardan başlayarak %{reducePct} kademeli küçült." );
+        else if (decision == MentorDecision.Buy)
+            actions.Add("Ekle: küçük boyutla kademeli artır (risk yönetimiyle)." );
+        else
+            actions.Add("Şüphe varsa: işlem yapma (NO ACTION)." );
+
+        foreach (var p in plan)
+        {
+            if (actions.Count >= 3) break;
+            actions.Add(p);
+        }
+
+        if (actions.Count < 3)
+            actions.Add($"Yeniden kontrol: {Math.Min(7, Math.Max(2, horizonDays))} gün içinde." );
+
+        mentor = new PortfolioMentorVm(
+            Decision: decision,
+            DecisionRaw: decisionRaw,
+            Confidence: Math.Min(100, Math.Max(0, confidence)),
+            Horizon: $"{horizonDays} gün",
+            Why: why,
+            Actions: actions.Take(3).ToList(),
+            RiskNote: "En kötü senaryo: şok hareketlerde konsantrasyon kaybı büyütür — önce risk düşür.",
+            Trigger: mentorEl.Value.TryGetProperty("timing_tr")?.GetStringOrNull() ?? "Büyük haber/etkinlik veya konsantrasyon artışı."
+        );
+
+        // Position cards
+        positionCards = new();
+        var positionsEl = root.TryGetProperty("positions");
+        if (positionsEl is not null && positionsEl.Value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var pos in positionsEl.Value.EnumerateArray())
+            {
+                var symbol = pos.TryGetProperty("symbol")?.GetStringOrNull() ?? "—";
+                var actRaw = pos.TryGetProperty("action")?.GetStringOrNull() ?? "HOLD";
+                var act = actRaw.ToUpperInvariant() switch
+                {
+                    "BUY" => MentorDecision.Buy,
+                    "REDUCE" => MentorDecision.Reduce,
+                    _ => MentorDecision.Hold
+                };
+
+                var actionPct = pos.TryGetProperty("action_pct")?.GetIntOrNull() ?? 0;
+                var horizon = pos.TryGetProperty("horizon_days")?.GetIntOrNull() ?? 7;
+
+                var reasons = new List<string>();
+                var note = pos.TryGetProperty("mentor_note_tr")?.GetStringOrNull();
+                if (!string.IsNullOrWhiteSpace(note)) reasons.Add(note!);
+
+                var reasonTypesEl = pos.TryGetProperty("reason_types");
+                if (reasonTypesEl is not null && reasonTypesEl.Value.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var rt in reasonTypesEl.Value.EnumerateArray().Take(2))
+                    {
+                        var label = rt.TryGetProperty("label_tr")?.GetStringOrNull();
+                        var ev = rt.TryGetProperty("evidence_tr")?.GetStringOrNull();
+                        var line = string.Join(" — ", new[] { label, ev }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                        if (!string.IsNullOrWhiteSpace(line)) reasons.Add(line);
+                    }
+                }
+
+                if (reasons.Count == 0)
+                    reasons.Add("Düzenli takip.");
+
+                var actionLines = new List<string>();
+                if (act == MentorDecision.Reduce)
+                    actionLines.Add($"Azalt: pozisyonun %{actionPct} kadarını küçült." );
+                else if (act == MentorDecision.Buy)
+                    actionLines.Add($"Ekle: pozisyonun %{Math.Max(5, actionPct)} kadarını kademeli artır." );
+                else
+                    actionLines.Add("İşlem yok (NO ACTION)." );
+
+                actionLines.Add("Zarar kontrolü: Stop-Loss (zarar kes) seviyeni önceden belirle." );
+                actionLines.Add($"Yeniden kontrol: {Math.Min(7, Math.Max(2, horizon))} gün içinde." );
+
+                // News line (if any event exists)
+                string? newsLine = null;
+                var eventsEl = pos.TryGetProperty("events");
+                if (eventsEl is not null && eventsEl.Value.ValueKind == JsonValueKind.Array)
+                {
+                    var first = eventsEl.Value.EnumerateArray().FirstOrDefault();
+                    if (first.ValueKind == JsonValueKind.Object)
+                    {
+                        var title = first.TryGetProperty("title_tr")?.GetStringOrNull();
+                        if (!string.IsNullOrWhiteSpace(title))
+                            newsLine = $"Etkinlik: {title}";
+                    }
+                }
+
+                positionCards.Add(new PositionCardVm(
+                    Symbol: symbol,
+                    Decision: act,
+                    Confidence: act == MentorDecision.Reduce ? 70 : act == MentorDecision.Buy ? 60 : 55,
+                    Horizon: $"{horizon} gün",
+                    Why: reasons.Take(2).ToList(),
+                    Actions: actionLines.Take(3).ToList(),
+                    NewsLine: newsLine
+                ));
+            }
+        }
+
+        // Evidence rows: single compact table
+        var portfolioEl = root.TryGetProperty("portfolio");
+        var totalValue = portfolioEl?.TryGetProperty("total_value")?.GetDoubleOrNull();
+        var totalPnlPct = portfolioEl?.TryGetProperty("total_pnl_percent")?.GetDoubleOrNull();
+        var riskEl = root.TryGetProperty("risk");
+        var concentrationNote = riskEl?.TryGetProperty("concentration")?.TryGetProperty("note_tr")?.GetStringOrNull();
+        var volNote = riskEl?.TryGetProperty("volatility")?.TryGetProperty("note_tr")?.GetStringOrNull();
+        var newsNote = riskEl?.TryGetProperty("news")?.TryGetProperty("note_tr")?.GetStringOrNull();
+
+        portfolioEvidenceRows = new()
+        {
+            new("Pozisyon sayısı", holdings.Count.ToString(CultureInfo.InvariantCulture)),
+            new("Toplam değer", totalValue is null ? "—" : totalValue.Value.ToString("F2", CultureInfo.InvariantCulture)),
+            new("Toplam P/L (%)", totalPnlPct is null ? "—" : totalPnlPct.Value.ToString("F2", CultureInfo.InvariantCulture)),
+            new("Konsantrasyon", concentrationNote ?? "—"),
+            new("Volatilite", volNote ?? "—"),
+            new("Haber", newsNote ?? "—"),
+        };
+    }
+
+    private string GetBaseUrl()
+    {
+        var baseUrl = "127.0.0.1";
+        try
+        {
+            if (DeviceInfo.Platform == DevicePlatform.Android)
+                baseUrl = "10.0.2.2";
+        }
+        catch
+        {
+            baseUrl = "127.0.0.1";
+        }
+        return baseUrl;
+    }
+
+    public void Dispose()
+    {
+        lastAnalyzeDoc?.Dispose();
+    }
+
+    private sealed record PortfolioMentorVm(
+        MentorDecision Decision,
+        string DecisionRaw,
+        int Confidence,
+        string Horizon,
+        List<string> Why,
+        List<string> Actions,
+        string RiskNote,
+        string Trigger
+    );
+
+    private sealed record PositionCardVm(
+        string Symbol,
+        MentorDecision Decision,
+        int Confidence,
+        string Horizon,
+        List<string> Why,
+        List<string> Actions,
+        string? NewsLine
+    );
+}
+
+<style>
+/* Reuse Home styles (kept local to this page for now) */
+.mentorPage{min-height:100vh;background:linear-gradient(135deg,#0a0e1a 0%,#0d1117 55%,#161b22 100%);padding:12px;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif}
+
+.mentorHeader{background:rgba(22,27,34,.6);border:1px solid rgba(48,54,61,.55);border-radius:16px;padding:14px 16px;margin-bottom:12px;backdrop-filter:blur(10px)}
+.mentorHeader__top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+
+.mentorBrand__title{font-weight:850;color:#fff;font-size:1.35rem;letter-spacing:-.02em}
+.mentorBrand__subtitle{margin-top:4px;color:rgba(255,255,255,.65);font-size:.9rem}
+
+.mentorNav{display:flex;gap:10px;align-items:center}
+.mentorNav__link{padding:8px 12px;border-radius:10px;text-decoration:none;color:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.10);background:rgba(13,17,23,.25)}
+.mentorNav__link.active{color:#fff;border-color:rgba(88,166,255,.45);background:rgba(88,166,255,.12)}
+
+.mentorInput{display:flex;flex-direction:column;gap:6px;background:rgba(13,17,23,.45);border:1px solid rgba(48,54,61,.55);border-radius:12px;padding:10px 12px}
+.mentorInput__label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55)}
+.mentorInput__control{background:transparent;border:none;outline:none;color:#fff;min-width:110px}
+
+.mentorAnalyze{background:linear-gradient(135deg,#238636,#2ea043);color:#fff;border:none;padding:11px 16px;border-radius:12px;font-weight:850;cursor:pointer}
+.mentorAnalyze:disabled{opacity:.6;cursor:not-allowed}
+
+.portBtn{background:rgba(33,38,45,.7);color:#c9d1d9;border:1px solid rgba(48,54,61,.6);padding:11px 14px;border-radius:12px;font-weight:750;cursor:pointer}
+.portBtn:disabled{opacity:.6;cursor:not-allowed}
+
+.mentorError{margin-bottom:12px;background:rgba(218,54,51,.22);border:1px solid rgba(248,81,73,.45);color:#fff;padding:12px 14px;border-radius:14px}
+
+.mentorEmpty{background:rgba(22,27,34,.45);border:1px solid rgba(48,54,61,.55);border-radius:16px;padding:18px}
+.mentorEmpty__title{font-weight:850;color:#fff;font-size:1.15rem}
+.mentorEmpty__text{margin-top:10px;color:rgba(255,255,255,.72);line-height:1.45}
+
+.portControls{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+.portForm{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.portStatus{color:rgba(255,255,255,.7)}
+
+.portLayout{display:flex;flex-direction:column;gap:12px}
+.portSectionTitle{font-weight:850;color:#fff}
+.portSectionHint{margin-top:4px;color:rgba(255,255,255,.62);font-size:.9rem}
+.portCards{display:grid;grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:12px}
+
+.portEvidenceExtra{margin-top:8px}
+.portEvidenceNote{color:rgba(255,255,255,.62);font-size:.9rem;line-height:1.4}
+</style>

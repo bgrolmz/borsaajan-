@@ -1,0 +1,16 @@
+@inherits LayoutComponentBase <div class="page"> <main> @Body </main> </div> <style>
+/* Tüm sayfa siyah olsun */
+.page {
+    background-color: #121212;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+/* Body içeriði */
+main {
+    width: 100%;
+    height: 100%;
+}
+
+</style >

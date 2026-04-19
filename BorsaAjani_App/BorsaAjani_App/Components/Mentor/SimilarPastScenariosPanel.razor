@@ -1,0 +1,31 @@
+@using BorsaAjani_App.Models
+
+<div class="sim">
+    <div class="sim__title">Benzer geçmiş senaryolar</div>
+    <div class="sim__subtitle">Bilgilendirme amaçlı — kararın kanıtı değil.</div>
+
+    <div class="sim__grid">
+        <div class="sim__kpi">
+            <div class="sim__kpiLabel">Benzer vaka</div>
+            <div class="sim__kpiValue">@Stats.SimilarCases</div>
+        </div>
+        <div class="sim__kpi">
+            <div class="sim__kpiLabel">Karar sonrası win rate</div>
+            <div class="sim__kpiValue">@(Stats.WinRatePct is null ? "—" : $"%{Stats.WinRatePct:0.0}")</div>
+        </div>
+        <div class="sim__kpi">
+            <div class="sim__kpiLabel">Ortalama drawdown</div>
+            <div class="sim__kpiValue">@(Stats.AvgDrawdownPct is null ? "—" : $"%{Stats.AvgDrawdownPct:0.0}")</div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Note))
+    {
+        <div class="sim__note">@Note</div>
+    }
+</div>
+
+@code {
+    [Parameter] public SimilarScenarioStats Stats { get; set; } = new(0, null, null);
+    [Parameter] public string? Note { get; set; }
+}

@@ -1,0 +1,23 @@
+.pc{background: rgba(22,27,34,.55); border:1px solid rgba(48,54,61,.55); border-radius: 16px; padding: 14px}
+.pc__top{display:flex; align-items:flex-start; justify-content:space-between; gap: 12px; flex-wrap:wrap}
+
+.pc__symbol{font-weight: 850; color:#fff; font-size: 1.1rem; letter-spacing:.02em}
+.pc__news{margin-top:6px; color: rgba(255,255,255,.62); font-size:.9rem; line-height:1.35}
+
+.pc__right{display:flex; align-items:flex-start; gap: 10px; flex-wrap:wrap; justify-content:flex-end}
+
+.pc__badge{border-radius:999px; padding: 6px 10px; font-weight: 850; letter-spacing:.08em; border: 1px solid rgba(255,255,255,.12)}
+.pc__badge--buy{background: rgba(46,160,67,.14); color:#3fb950; border-color: rgba(46,160,67,.35)}
+.pc__badge--hold{background: rgba(245,158,11,.12); color:#f59e0b; border-color: rgba(245,158,11,.35)}
+.pc__badge--reduce{background: rgba(248,81,73,.14); color:#f85149; border-color: rgba(248,81,73,.35)}
+.pc__badge--avoid{background: rgba(139,148,158,.12); color:#c9d1d9; border-color: rgba(139,148,158,.25)}
+
+.pc__meta{display:flex; gap: 10px}
+.pc__metaItem{background: rgba(13,17,23,.35); border:1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 8px 10px; min-width: 90px}
+.pc__metaLabel{font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color: rgba(255,255,255,.55)}
+.pc__metaValue{margin-top:6px; color:#e6edf3; font-weight:800}
+
+.pc__section{margin-top: 12px; background: rgba(13,17,23,.35); border:1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px}
+.pc__sectionTitle{font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color: rgba(255,255,255,.65); margin-bottom: 8px}
+.pc__list{margin:0; padding-left: 18px; color: rgba(255,255,255,.86)}
+.pc__list li{margin: 6px 0; line-height: 1.4}

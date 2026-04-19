@@ -1,0 +1,13 @@
+.ev{margin-top: 14px; background: rgba(22,27,34,.35); border:1px solid rgba(48,54,61,.55); border-radius: 16px; overflow:hidden}
+.ev__summary{list-style:none; cursor:pointer; padding: 14px 16px; display:flex; align-items:center; justify-content:space-between; gap: 12px; background: rgba(13,17,23,.55)}
+.ev__summary::-webkit-details-marker{display:none}
+.ev__summaryTitle{font-weight: 800; color:#e6edf3}
+.ev__summaryHint{font-size:.85rem; color: rgba(255,255,255,.62)}
+
+.ev__body{padding: 14px 16px}
+
+.ev__tableWrap{margin-top: 12px; overflow:auto; border-radius: 12px; border: 1px solid rgba(255,255,255,.08)}
+.ev__table{width:100%; border-collapse: collapse; background: rgba(13,17,23,.55)}
+.ev__k{padding: 10px 12px; color: rgba(255,255,255,.65); width: 42%; border-bottom: 1px solid rgba(255,255,255,.06)}
+.ev__v{padding: 10px 12px; color: rgba(255,255,255,.9); border-bottom: 1px solid rgba(255,255,255,.06)}
+.ev__table tr:last-child td{border-bottom:none}

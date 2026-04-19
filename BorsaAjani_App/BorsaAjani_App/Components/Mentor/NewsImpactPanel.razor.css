@@ -1,0 +1,19 @@
+.news{background: rgba(22,27,34,.55); border:1px solid rgba(48,54,61,.55); border-radius: 16px; padding: 16px}
+.news__header{display:flex; align-items:flex-end; justify-content:space-between; gap: 12px; margin-bottom: 12px}
+.news__title{font-weight: 750; color:#e6edf3}
+.news__subtitle{font-size:.85rem; color: rgba(255,255,255,.62); margin-top: 4px}
+
+.news__empty{padding: 14px; color: rgba(255,255,255,.65); background: rgba(13,17,23,.4); border: 1px dashed rgba(255,255,255,.12); border-radius: 12px}
+
+.news__grid{display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px}
+.news__card{background: rgba(13,17,23,.55); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px}
+.news__cardTop{display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 10px}
+
+.news__impact{font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,.12)}
+.news__impact--bull{background: rgba(46,160,67,.14); color:#3fb950; border-color: rgba(46,160,67,.35)}
+.news__impact--bear{background: rgba(248,81,73,.14); color:#f85149; border-color: rgba(248,81,73,.35)}
+.news__impact--neutral{background: rgba(139,148,158,.12); color:#c9d1d9; border-color: rgba(139,148,158,.25)}
+
+.news__confidence{font-weight: 700; color: rgba(255,255,255,.75)}
+.news__what{font-weight: 650; color:#e6edf3; line-height: 1.35}
+.news__why{margin-top: 8px; color: rgba(255,255,255,.72); line-height: 1.4; font-size: .9rem}

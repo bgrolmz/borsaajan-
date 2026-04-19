@@ -1,0 +1,98 @@
+@using System.Globalization
+@using BorsaAjani_App.Models
+
+<div class="mc">
+    <div class="mc__top">
+        <div class="mc__badge @DecisionCss">
+            <div class="mc__badgeText">@DecisionLabel</div>
+            @if (!string.IsNullOrWhiteSpace(DecisionSubLabel))
+            {
+                <div class="mc__badgeSub">@DecisionSubLabel</div>
+            }
+        </div>
+
+        <div class="mc__meta">
+            <div class="mc__metaItem">
+                <div class="mc__metaLabel">Güven</div>
+                <div class="mc__metaValue">@Confidence%</div>
+            </div>
+            <div class="mc__metaItem">
+                <div class="mc__metaLabel">Ufuk</div>
+                <div class="mc__metaValue">@Horizon</div>
+            </div>
+        </div>
+    </div>
+
+    @if (WhyBullets?.Count > 0)
+    {
+        <div class="mc__section">
+            <div class="mc__sectionTitle">Neden (önce kaybı önle)</div>
+            <ul class="mc__list">
+                @foreach (var item in WhyBullets.Take(3))
+                {
+                    <li>@item</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (ActionSteps?.Count > 0)
+    {
+        <div class="mc__section">
+            <div class="mc__sectionTitle">Nasıl / Ne kadar / Ne zaman</div>
+            <ol class="mc__steps">
+                @foreach (var step in ActionSteps.Take(4))
+                {
+                    <li>@step</li>
+                }
+            </ol>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(RiskNote))
+    {
+        <div class="mc__risk">
+            <div class="mc__riskLabel">Risk notu</div>
+            <div class="mc__riskText">@RiskNote</div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(ReevaluateTrigger))
+    {
+        <div class="mc__trigger">
+            <div class="mc__triggerLabel">Yeniden değerlendir tetikleyicisi</div>
+            <div class="mc__triggerText">@ReevaluateTrigger</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public MentorDecision Decision { get; set; } = MentorDecision.Hold;
+    [Parameter] public int Confidence { get; set; } = 50;
+    [Parameter] public string Horizon { get; set; } = "1–2 hafta";
+
+    [Parameter] public List<string> WhyBullets { get; set; } = new();
+    [Parameter] public List<string> ActionSteps { get; set; } = new();
+
+    [Parameter] public string? RiskNote { get; set; }
+    [Parameter] public string? ReevaluateTrigger { get; set; }
+
+    // Optional (e.g., "AL" / "TUT" etc.)
+    [Parameter] public string? DecisionSubLabel { get; set; }
+
+    private string DecisionCss => Decision switch
+    {
+        MentorDecision.Buy => "mc__badge--buy",
+        MentorDecision.Reduce => "mc__badge--reduce",
+        MentorDecision.Avoid => "mc__badge--avoid",
+        _ => "mc__badge--hold"
+    };
+
+    private string DecisionLabel => Decision switch
+    {
+        MentorDecision.Buy => "BUY",
+        MentorDecision.Reduce => "REDUCE",
+        MentorDecision.Avoid => "AVOID",
+        _ => "HOLD"
+    };
+}

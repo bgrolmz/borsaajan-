@@ -1,0 +1,680 @@
+@rendermode @(RenderMode.InteractiveServer)
+@using System.Text.Json
+@using BorsaAjani_Web.Services
+@using Microsoft.AspNetCore.Components.Web
+@inject IHttpClientFactory HttpClientFactory
+@inject ChatContextService ContextService
+@implements IAsyncDisposable
+
+<div class="chat-container">
+    <!-- Floating Action Button -->
+    <button class="chat-fab" @onclick="ToggleChat" type="button" title="AI Investment Mentor">
+        💬
+    </button>
+
+    <!-- Chat Window -->
+    @if (isOpen)
+    {
+        <div class="chat-window">
+            <div class="chat-header">
+                <h3>🤖 AI Investment Mentor</h3>
+                <button class="chat-close" @onclick="ToggleChat">✕</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(chatUnavailableReason))
+            {
+                <div class="chat-banner" role="alert">
+                    <div class="chat-banner__title">Chat unavailable</div>
+                    <div class="chat-banner__text">@chatUnavailableReason</div>
+                    <div class="chat-banner__hint">Try again, or use QUICK analysis from the main screen.</div>
+                </div>
+            }
+            
+            <div class="chat-messages" @ref="messagesContainer">
+                @foreach (var message in messages)
+                {
+                    <div class="message @message.Type">
+                        <div class="message-content">@message.Text</div>
+                        <div class="message-time">@message.Time.ToString("HH:mm")</div>
+                    </div>
+                }
+                @if (isLoading)
+                {
+                    <div class="message bot">
+                        <div class="message-content">
+                            <span class="typing-indicator">...</span>
+                        </div>
+                    </div>
+                }
+            </div>
+            
+            <div class="chat-input-container">
+                <input 
+                    @bind="currentMessage" 
+                    @bind:event="oninput"
+                    @onkeypress="HandleKeyPress"
+                    placeholder="Sorunuzu yazın... (örn: Bu hisseyi şimdi almalı mıyım?)"
+                    class="chat-input"
+                    disabled="@isLoading"
+                />
+                <button 
+                    @onclick="SendMessage" 
+                    class="chat-send"
+                    disabled="@(isLoading || string.IsNullOrWhiteSpace(currentMessage))"
+                >
+                    ➤
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isOpen = false;
+    private string currentMessage = "";
+    private bool isLoading = false;
+    private ElementReference messagesContainer;
+    private List<ChatMessage> messages = new();
+    private string? chatUnavailableReason;
+
+    // #region agent log
+    private static void AgentLog(string location, string message, object? data, string hypothesisId, string runId = "pre")
+    {
+        try
+        {
+            var payload = new
+            {
+                sessionId = "debug-session",
+                runId,
+                hypothesisId,
+                location,
+                message,
+                data,
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+            System.IO.Directory.CreateDirectory(@"c:\Users\msi-nb\Desktop\Borsa_Projem\.cursor");
+            System.IO.File.AppendAllText(
+                @"c:\Users\msi-nb\Desktop\Borsa_Projem\.cursor\debug.log",
+                System.Text.Json.JsonSerializer.Serialize(payload) + Environment.NewLine
+            );
+        }
+        catch
+        {
+            // never throw from debug logging
+        }
+    }
+    // #endregion
+    
+    
+    private class ChatMessage
+    {
+        public string Text { get; set; } = "";
+        public string Type { get; set; } = "user"; // "user" or "bot"
+        public DateTime Time { get; set; } = DateTime.Now;
+    }
+    
+    private void ToggleChat(MouseEventArgs e)
+    {
+        isOpen = !isOpen;
+        if (isOpen && messages.Count == 0)
+        {
+            // Add welcome message
+            messages.Add(new ChatMessage
+            {
+                Text = "Merhaba! Ben AI Yatırım Mentor'unuz. Hangi hisse hakkında soru sormak istersiniz?",
+                Type = "bot",
+                Time = DateTime.Now
+            });
+        }
+        StateHasChanged();
+    }
+    
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(currentMessage) || isLoading)
+            return;
+        
+        // Add user message
+        var userMsg = new ChatMessage
+        {
+            Text = currentMessage,
+            Type = "user",
+            Time = DateTime.Now
+        };
+        messages.Add(userMsg);
+        
+        string messageToSend = currentMessage;
+        currentMessage = "";
+        isLoading = true;
+        chatUnavailableReason = null;
+        StateHasChanged();
+        
+        // Scroll to bottom
+        await Task.Delay(100);
+        await ScrollToBottom();
+        
+        try
+        {
+            var client = HttpClientFactory.CreateClient("BackendApi");
+            AgentLog(
+                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                message: "SendMessage entry",
+                data: new { baseUrl = client.BaseAddress?.ToString(), messageLen = messageToSend.Length },
+                hypothesisId: "A"
+            );
+            
+            // Get context data from service
+            var contextData = ContextService.GetContext();
+            AgentLog(
+                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                message: "Context snapshot",
+                data: new { hasContext = contextData is not null, contextKeys = contextData?.Keys?.ToArray() },
+                hypothesisId: "D"
+            );
+            
+            // Ensure context_data is always a dictionary (not null)
+            // Backend expects a dictionary, so send empty dict if null
+            var contextDict = contextData ?? new Dictionary<string, object>();
+            
+            // Prepare request with context data
+            var requestBody = new
+            {
+                user_message = messageToSend,
+                context_data = contextDict
+            };
+            
+            string json;
+            try
+            {
+                json = JsonSerializer.Serialize(requestBody);
+            }
+            catch (Exception serEx)
+            {
+                AgentLog(
+                    location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                    message: "Request serialization failed",
+                    data: new { exType = serEx.GetType().Name, serEx.Message },
+                    hypothesisId: "D"
+                );
+                throw;
+            }
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            
+            AgentLog(
+                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                message: "POST /chat",
+                data: new { path = "/chat", bodyLen = json.Length },
+                hypothesisId: "A"
+            );
+            var response = await client.PostAsync("/chat", content);
+            AgentLog(
+                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                message: "POST /chat completed",
+                data: new { status = (int)response.StatusCode, reason = response.ReasonPhrase },
+                hypothesisId: "B"
+            );
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var responseJson = await response.Content.ReadAsStringAsync();
+                Dictionary<string, JsonElement>? result = null;
+                try
+                {
+                    result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson);
+                }
+                catch (Exception parseEx)
+                {
+                    AgentLog(
+                        location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                        message: "Response JSON parse failed",
+                        data: new { exType = parseEx.GetType().Name, parseEx.Message, bodyFirst200 = responseJson.Substring(0, Math.Min(200, responseJson.Length)) },
+                        hypothesisId: "C"
+                    );
+                    throw;
+                }
+                
+                if (result != null)
+                {
+                    AgentLog(
+                        location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                        message: "Parsed response keys",
+                        data: new { keys = result.Keys.ToArray() },
+                        hypothesisId: "C"
+                    );
+                    string botResponse = "Üzgünüm, cevap alınamadı.";
+
+                    // Preferred: structured mentor contract
+                    if (result.TryGetValue("decision", out var decEl) && decEl.ValueKind == JsonValueKind.String)
+                    {
+                        var decision = decEl.GetString() ?? "HOLD";
+                        var conf = result.TryGetValue("confidence", out var confEl) && confEl.ValueKind == JsonValueKind.Number ? confEl.GetInt32() : 50;
+                        var horizon = result.TryGetValue("horizon_days", out var hEl) && hEl.ValueKind == JsonValueKind.Number ? hEl.GetInt32() : 7;
+                        var riskNote = result.TryGetValue("risk_note", out var rnEl) && rnEl.ValueKind == JsonValueKind.String ? rnEl.GetString() ?? "" : "";
+                        var scenario = result.TryGetValue("mentor_scenario", out var msEl) && msEl.ValueKind == JsonValueKind.String ? msEl.GetString() ?? "" : "";
+
+                        var lines = new List<string>
+                        {
+                            $"Decision: {decision} (confidence: {conf}/100, horizon: {horizon}d)"
+                        };
+
+                        if (result.TryGetValue("why_bullets", out var whyEl) && whyEl.ValueKind == JsonValueKind.Array)
+                        {
+                            var why = whyEl.EnumerateArray()
+                                .Where(x => x.ValueKind == JsonValueKind.String)
+                                .Select(x => x.GetString())
+                                .Where(x => !string.IsNullOrWhiteSpace(x))
+                                .Take(3)
+                                .ToList();
+                            if (why.Count > 0)
+                            {
+                                lines.Add("Why:");
+                                lines.AddRange(why.Select(w => $"- {w}"));
+                            }
+                        }
+
+                        if (result.TryGetValue("action_plan", out var planEl) && planEl.ValueKind == JsonValueKind.Array)
+                        {
+                            var planLines = new List<string>();
+                            foreach (var item in planEl.EnumerateArray().Take(4))
+                            {
+                                if (item.ValueKind != JsonValueKind.Object) continue;
+                                var t = item.TryGetProperty("type", out var tEl) && tEl.ValueKind == JsonValueKind.String ? tEl.GetString() ?? "" : "";
+                                var r = item.TryGetProperty("rationale_short", out var rEl) && rEl.ValueKind == JsonValueKind.String ? rEl.GetString() ?? "" : "";
+                                if (!string.IsNullOrWhiteSpace(t) || !string.IsNullOrWhiteSpace(r))
+                                    planLines.Add($"- {t}: {r}".Trim());
+                            }
+                            if (planLines.Count > 0)
+                            {
+                                lines.Add("Action plan:");
+                                lines.AddRange(planLines);
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(scenario))
+                            lines.Add($"Mentor scenario: {scenario}");
+                        if (!string.IsNullOrWhiteSpace(riskNote))
+                            lines.Add($"Risk note: {riskNote}");
+
+                        // If backend indicates missing/errors, surface it mentor-style
+                        if (result.TryGetValue("missing", out var missEl) && missEl.ValueKind == JsonValueKind.Array)
+                        {
+                            var miss = missEl.EnumerateArray()
+                                .Where(x => x.ValueKind == JsonValueKind.String)
+                                .Select(x => x.GetString())
+                                .Where(x => !string.IsNullOrWhiteSpace(x))
+                                .ToList();
+                            if (miss.Count > 0)
+                            {
+                                chatUnavailableReason = $"Chat unavailable: missing data ({string.Join(", ", miss)}).";
+                                lines.Add("");
+                                lines.Add("Note: Some context is missing, so the decision is conservative.");
+                            }
+                        }
+                        if (result.TryGetValue("errors", out var errEl) && errEl.ValueKind == JsonValueKind.Array)
+                        {
+                            var errs = errEl.EnumerateArray()
+                                .Where(x => x.ValueKind == JsonValueKind.String)
+                                .Select(x => x.GetString())
+                                .Where(x => !string.IsNullOrWhiteSpace(x))
+                                .ToList();
+                            if (errs.Count > 0)
+                            {
+                                chatUnavailableReason = $"Chat unavailable: {string.Join(", ", errs)}.";
+                            }
+                        }
+
+                        botResponse = string.Join("\n", lines);
+                    }
+                    
+                    if (result.ContainsKey("response"))
+                    {
+                        var responseElement = result["response"];
+                        if (responseElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            botResponse = responseElement.GetString() ?? "Üzgünüm, cevap alınamadı.";
+                        }
+                    }
+                    else if (result.ContainsKey("error"))
+                    {
+                        var errorElement = result["error"];
+                        if (errorElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            botResponse = $"Hata: {errorElement.GetString()}";
+                        }
+                    }
+                    
+                    messages.Add(new ChatMessage
+                    {
+                        Text = botResponse,
+                        Type = "bot",
+                        Time = DateTime.Now
+                    });
+                }
+                else
+                {
+                    messages.Add(new ChatMessage
+                    {
+                        Text = "Üzgünüm, bir hata oluştu.",
+                        Type = "bot",
+                        Time = DateTime.Now
+                    });
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                chatUnavailableReason = $"Backend replied HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).";
+                AgentLog(
+                    location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                    message: "Non-success HTTP response",
+                    data: new { status = (int)response.StatusCode, reason = response.ReasonPhrase, bodyFirst200 = errorContent.Substring(0, Math.Min(200, errorContent.Length)) },
+                    hypothesisId: "B"
+                );
+                messages.Add(new ChatMessage
+                {
+                    Text = $"Bağlantı hatası ({response.StatusCode}): {errorContent}",
+                    Type = "bot",
+                    Time = DateTime.Now
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            chatUnavailableReason = $"Network/parse error: {ex.GetType().Name}: {ex.Message}";
+            AgentLog(
+                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
+                message: "SendMessage exception",
+                data: new { exType = ex.GetType().Name, ex.Message },
+                hypothesisId: "A"
+            );
+            messages.Add(new ChatMessage
+            {
+                Text = $"Hata: {ex.Message}",
+                Type = "bot",
+                Time = DateTime.Now
+            });
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+    
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+    
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await Task.Delay(50);
+            // Use JS interop to scroll
+            // For now, just trigger StateHasChanged
+        }
+        catch { }
+    }
+    
+    public ValueTask DisposeAsync()
+    {
+        // Cleanup if needed
+        return ValueTask.CompletedTask;
+    }
+}
+
+<style>
+    .chat-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 10000;
+        pointer-events: none;
+    }
+    
+    .chat-container * {
+        pointer-events: auto;
+    }
+
+    .chat-fab {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: #00FFA3;
+        border: none;
+        color: #003920;
+        font-size: 22px;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0, 255, 163, 0.35);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        z-index: 1001;
+        pointer-events: auto;
+        font-weight: 700;
+    }
+
+    .chat-fab:hover {
+        transform: scale(1.08);
+        box-shadow: 0 6px 24px rgba(0, 255, 163, 0.5);
+        background: #52ffac;
+    }
+
+    .chat-window {
+        position: absolute;
+        bottom: 68px;
+        right: 0;
+        width: 380px;
+        height: 560px;
+        background: #171f33;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 255, 163, 0.12);
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .chat-banner{
+        margin: 12px 16px 0 16px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(248, 81, 73, 0.15);
+        border: 1px solid rgba(248, 81, 73, 0.35);
+        color: #fff;
+    }
+    .chat-banner__title{
+        font-weight: 800;
+        font-size: .9rem;
+        margin-bottom: 4px;
+    }
+    .chat-banner__text{
+        color: rgba(255,255,255,.85);
+        font-size: .85rem;
+        line-height: 1.35;
+    }
+    .chat-banner__hint{
+        margin-top: 6px;
+        color: rgba(255,255,255,.7);
+        font-size: .8rem;
+    }
+
+    .chat-header {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(0, 255, 163, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #131b2e;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .chat-header h3 {
+        margin: 0;
+        color: #fff;
+        font-size: 1rem;
+    }
+
+    .chat-close {
+        background: none;
+        border: none;
+        color: #8b949e;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+
+    .chat-close:hover {
+        background: rgba(248, 81, 73, 0.2);
+        color: #f85149;
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .message {
+        display: flex;
+        flex-direction: column;
+        max-width: 80%;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .message.user {
+        align-self: flex-end;
+    }
+
+    .message.bot {
+        align-self: flex-start;
+    }
+
+    .message-content {
+        padding: 10px 14px;
+        border-radius: 12px;
+        word-wrap: break-word;
+        line-height: 1.5;
+    }
+
+    .message.user .message-content {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message.bot .message-content {
+        background: rgba(48, 54, 61, 0.6);
+        color: #c9d1d9;
+        border-bottom-left-radius: 4px;
+        white-space: pre-wrap;
+    }
+
+    .message-time {
+        font-size: 0.7rem;
+        color: #8b949e;
+        margin-top: 4px;
+        padding: 0 4px;
+    }
+
+    .typing-indicator {
+        display: inline-block;
+        animation: typing 1.4s infinite;
+    }
+
+    @@keyframes typing {
+        0%, 60%, 100% { opacity: 0.3; }
+        30% { opacity: 1; }
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .chat-input-container {
+        padding: 12px;
+        border-top: 1px solid rgba(48, 54, 61, 0.5);
+        display: flex;
+        gap: 8px;
+        background: rgba(33, 38, 45, 0.6);
+        border-radius: 0 0 12px 12px;
+    }
+
+    .chat-input {
+        flex: 1;
+        padding: 10px 14px;
+        background: rgba(13, 17, 23, 0.6);
+        border: 1px solid rgba(48, 54, 61, 0.5);
+        border-radius: 8px;
+        color: #c9d1d9;
+        font-size: 0.9rem;
+        outline: none;
+    }
+
+    .chat-input:focus {
+        border-color: #667eea;
+    }
+
+    .chat-input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .chat-send {
+        padding: 10px 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-size: 18px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .chat-send:hover:not(:disabled) {
+        transform: scale(1.05);
+    }
+
+    .chat-send:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Scrollbar styling */
+    .chat-messages::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+        background: rgba(13, 17, 23, 0.3);
+        border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(48, 54, 61, 0.6);
+        border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+        background: rgba(48, 54, 61, 0.8);
+    }
+</style>

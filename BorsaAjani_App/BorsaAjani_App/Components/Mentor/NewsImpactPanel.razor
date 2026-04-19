@@ -1,0 +1,49 @@
+@using BorsaAjani_App.Models
+
+<div class="news">
+    <div class="news__header">
+        <div>
+            <div class="news__title">Haber etkisi (özet)</div>
+            <div class="news__subtitle">Tam metin yok — sadece karar için gerekli olan.</div>
+        </div>
+    </div>
+
+    @if (Items is null || Items.Count == 0)
+    {
+        <div class="news__empty">Öne çıkan haber bulunamadı veya veri gelmedi.</div>
+    }
+    else
+    {
+        <div class="news__grid">
+            @foreach (var item in Items.Take(3))
+            {
+                <div class="news__card">
+                    <div class="news__cardTop">
+                        <div class="news__impact @ImpactCss(item.Impact)">@ImpactLabel(item.Impact)</div>
+                        <div class="news__confidence">@item.Confidence%</div>
+                    </div>
+                    <div class="news__what">@item.WhatHappened</div>
+                    <div class="news__why">@item.WhyItMatters</div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<NewsImpactCard> Items { get; set; } = new();
+
+    private static string ImpactLabel(NewsImpact impact) => impact switch
+    {
+        NewsImpact.Bullish => "Bullish",
+        NewsImpact.Bearish => "Bearish",
+        _ => "Neutral"
+    };
+
+    private static string ImpactCss(NewsImpact impact) => impact switch
+    {
+        NewsImpact.Bullish => "news__impact--bull",
+        NewsImpact.Bearish => "news__impact--bear",
+        _ => "news__impact--neutral"
+    };
+}

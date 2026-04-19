@@ -1,0 +1,42 @@
+@using BorsaAjani_App.Models
+
+<details class="ev" open="@OpenByDefault">
+    <summary class="ev__summary">
+        <div class="ev__summaryTitle">@Title</div>
+        <div class="ev__summaryHint">Ham veri + teknik özet</div>
+    </summary>
+
+    <div class="ev__body">
+        @if (ChildContent is not null)
+        {
+            @ChildContent
+        }
+
+        @if (Rows?.Count > 0)
+        {
+            <div class="ev__tableWrap">
+                <table class="ev__table">
+                    <tbody>
+                    @foreach (var row in Rows)
+                    {
+                        <tr>
+                            <td class="ev__k">@row.Key</td>
+                            <td class="ev__v">@row.Value</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</details>
+
+@code {
+    public sealed record EvidenceRow(string Key, string Value);
+
+    [Parameter] public string Title { get; set; } = "Kanıtı göster";
+    [Parameter] public bool OpenByDefault { get; set; } = false;
+    [Parameter] public List<EvidenceRow> Rows { get; set; } = new();
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

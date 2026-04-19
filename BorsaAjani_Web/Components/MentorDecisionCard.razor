@@ -1,0 +1,610 @@
+@* Mentor Decision Card - Redesigned for mentor-first output *@
+@using System.Reflection
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+@if (IsLoading)
+{
+    @MentorDecisionCardSkeleton
+}
+else if (Model != null)
+{
+    <div class="mentor-card fade-in">
+        @{
+            var decision = GetPropertyValue<string>(Model, "Decision") ?? GetPropertyValue<string>(Model, "decision") ?? "HOLD";
+            var confidence = GetPropertyValue<int?>(Model, "Confidence") ?? GetPropertyValue<int?>(Model, "confidence") ?? 0;
+            var horizon = GetPropertyValue<string>(Model, "Horizon") ?? GetPropertyValue<string>(Model, "horizon_days") ?? "7 gün";
+            var whyBullets = GetPropertyValue<List<string>>(Model, "WhyBulletsTr") ?? GetPropertyValue<List<string>>(Model, "why_bullets") ?? new List<string>();
+            var actionPlan = GetPropertyValue<List<object>>(Model, "ActionPlan") ?? GetPropertyValue<List<object>>(Model, "action_plan") ?? new List<object>();
+            var mentorScenario = GetPropertyValue<string>(Model, "MentorScenario") ?? GetPropertyValue<string>(Model, "mentor_scenario") ?? "";
+            var riskNote = GetPropertyValue<string>(Model, "RiskNoteTr") ?? GetPropertyValue<string>(Model, "risk_note") ?? "";
+            var glossaryTerms = GetPropertyValue<Dictionary<string, string>>(Model, "GlossaryTerms") ?? GetPropertyValue<Dictionary<string, string>>(Model, "glossary_terms") ?? new Dictionary<string, string>();
+        }
+
+        @* 1. Decision + Confidence *@
+        <div class="mentor-card__header">
+            <div class="mentor-card__decision-badge @GetDecisionClass(decision)">
+                <span class="mentor-card__decision-text">@decision</span>
+                <span class="mentor-card__confidence">@confidence%</span>
+            </div>
+            <div class="mentor-card__horizon">
+                <span class="mentor-card__horizon-label">Ufuk:</span>
+                <span class="mentor-card__horizon-value">@horizon</span>
+            </div>
+        </div>
+
+        @* 2. Why (2-3 bullets) *@
+        @if (whyBullets != null && whyBullets.Count > 0)
+        {
+            <div class="mentor-card__section mentor-card__section--why">
+                <h3 class="mentor-card__section-title">Neden</h3>
+                <ul class="mentor-card__bullets">
+                    @foreach (var bullet in whyBullets.Take(3))
+                    {
+                        <li class="mentor-card__bullet">
+                            <span class="mentor-card__bullet-icon">→</span>
+                            <span class="mentor-card__bullet-text">@RenderWithTooltips(bullet, glossaryTerms)</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @* 3. Actions (max 3-4; include % of position; stop/tp; wait allowed) *@
+        @if (actionPlan != null && actionPlan.Count > 0)
+        {
+            <div class="mentor-card__section mentor-card__section--actions">
+                <h3 class="mentor-card__section-title">Aksiyonlar</h3>
+                <div class="mentor-card__actions">
+                    @foreach (var action in actionPlan.Take(4))
+                    {
+                        <div class="mentor-card__action">
+                            @{
+                                var actionType = GetActionType(action);
+                                var actionText = GetActionText(action);
+                                var positionPct = GetActionPositionPercent(action);
+                                var priceLevel = GetActionPriceLevel(action);
+                                var timeframe = GetActionTimeframe(action);
+                            }
+                            <div class="mentor-card__action-header">
+                                <span class="mentor-card__action-type @GetActionTypeClass(actionType)">@actionType</span>
+                                @if (positionPct.HasValue)
+                                {
+                                    <span class="mentor-card__action-pct">%@positionPct</span>
+                                }
+                            </div>
+                            <div class="mentor-card__action-body">
+                                @if (!string.IsNullOrEmpty(actionText))
+                                {
+                                    <div class="mentor-card__action-text">@RenderWithTooltips(actionText, glossaryTerms)</div>
+                                }
+                                @if (priceLevel.HasValue)
+                                {
+                                    <div class="mentor-card__action-price">Fiyat: $@priceLevel.Value.ToString("F2")</div>
+                                }
+                                @if (!string.IsNullOrEmpty(timeframe))
+                                {
+                                    <div class="mentor-card__action-timeframe">Süre: @timeframe</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* 4. Scenario *@
+        @if (!string.IsNullOrEmpty(mentorScenario))
+        {
+            <div class="mentor-card__section mentor-card__section--scenario">
+                <h3 class="mentor-card__section-title">Senaryo</h3>
+                <p class="mentor-card__scenario-text">@RenderWithTooltips(mentorScenario, glossaryTerms)</p>
+            </div>
+        }
+
+        @* 5. Risk Note *@
+        @if (!string.IsNullOrEmpty(riskNote))
+        {
+            <div class="mentor-card__section mentor-card__section--risk">
+                <h3 class="mentor-card__section-title">Risk Notu</h3>
+                <p class="mentor-card__risk-text">@RenderWithTooltips(riskNote, glossaryTerms)</p>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public object? Model { get; set; }
+    
+    [Parameter]
+    public bool IsLoading { get; set; } = false;
+
+    private T? GetPropertyValue<T>(object? obj, string propertyName)
+    {
+        if (obj == null) return default(T);
+        
+        var prop = obj.GetType().GetProperty(propertyName, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+        if (prop == null) return default(T);
+        
+        var value = prop.GetValue(obj);
+        if (value == null) return default(T);
+        
+        if (value is T typedValue)
+            return typedValue;
+        
+        try
+        {
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+        catch
+        {
+            return default(T);
+        }
+    }
+
+    private string GetDecisionClass(string decision)
+    {
+        return decision.ToUpper() switch
+        {
+            "BUY" or "AL" or "LONG" => "mentor-card__decision-badge--buy",
+            "REDUCE" or "SAT" or "SHORT" => "mentor-card__decision-badge--reduce",
+            "AVOID" => "mentor-card__decision-badge--avoid",
+            _ => "mentor-card__decision-badge--hold"
+        };
+    }
+
+    private string GetActionType(object action)
+    {
+        if (action is JsonElement jsonElement)
+        {
+            if (jsonElement.TryGetProperty("type", out var typeElement))
+                return typeElement.GetString() ?? "WAIT";
+        }
+        else
+        {
+            var type = GetPropertyValue<string>(action, "type");
+            if (!string.IsNullOrEmpty(type))
+                return type;
+        }
+        return "WAIT";
+    }
+
+    private string GetActionText(object action)
+    {
+        if (action is JsonElement jsonElement)
+        {
+            if (jsonElement.TryGetProperty("rationale_short", out var rationaleElement))
+                return rationaleElement.GetString() ?? "";
+        }
+        else
+        {
+            var rationale = GetPropertyValue<string>(action, "rationale_short");
+            if (!string.IsNullOrEmpty(rationale))
+                return rationale;
+        }
+        return "";
+    }
+
+    private int? GetActionPositionPercent(object action)
+    {
+        if (action is JsonElement jsonElement)
+        {
+            if (jsonElement.TryGetProperty("amount_percent_of_position_value", out var pctElement))
+            {
+                if (pctElement.ValueKind == JsonValueKind.Number)
+                    return pctElement.GetInt32();
+            }
+        }
+        else
+        {
+            return GetPropertyValue<int?>(action, "amount_percent_of_position_value");
+        }
+        return null;
+    }
+
+    private double? GetActionPriceLevel(object action)
+    {
+        if (action is JsonElement jsonElement)
+        {
+            if (jsonElement.TryGetProperty("price_level", out var priceElement))
+            {
+                if (priceElement.ValueKind == JsonValueKind.Number)
+                    return priceElement.GetDouble();
+            }
+        }
+        else
+        {
+            return GetPropertyValue<double?>(action, "price_level");
+        }
+        return null;
+    }
+
+    private string GetActionTimeframe(object action)
+    {
+        if (action is JsonElement jsonElement)
+        {
+            if (jsonElement.TryGetProperty("timeframe", out var timeframeElement))
+                return timeframeElement.GetString() ?? "";
+        }
+        else
+        {
+            var timeframe = GetPropertyValue<string>(action, "timeframe");
+            if (!string.IsNullOrEmpty(timeframe))
+                return timeframe;
+        }
+        return "";
+    }
+
+    private string GetActionTypeClass(string actionType)
+    {
+        return actionType.ToUpper() switch
+        {
+            "BUY" or "AL" => "mentor-card__action-type--buy",
+            "SELL" or "REDUCE" or "SAT" => "mentor-card__action-type--sell",
+            "SET_SL" or "SET_STOP_LOSS" => "mentor-card__action-type--stop",
+            "SET_TP" or "SET_TAKE_PROFIT" => "mentor-card__action-type--profit",
+            "WAIT" or "NO_ACTION" => "mentor-card__action-type--wait",
+            _ => "mentor-card__action-type--default"
+        };
+    }
+
+    private RenderFragment RenderWithTooltips(string text, Dictionary<string, string> glossaryTerms)
+    {
+        if (string.IsNullOrEmpty(text) || glossaryTerms == null || glossaryTerms.Count == 0)
+            return builder => builder.AddContent(0, text);
+
+        return builder =>
+        {
+            var parts = text.Split(' ');
+            var currentIndex = 0;
+            
+            foreach (var part in parts)
+            {
+                if (currentIndex > 0)
+                {
+                    builder.AddContent(currentIndex++, " ");
+                }
+                
+                var cleanPart = part.Trim().TrimEnd(',', '.', ';', ':', '!', '?');
+                if (glossaryTerms.ContainsKey(cleanPart))
+                {
+                    var tooltip = glossaryTerms[cleanPart];
+                    builder.OpenElement(currentIndex++, "span");
+                    builder.AddAttribute(currentIndex++, "class", "mentor-card__tooltip-trigger");
+                    builder.AddAttribute(currentIndex++, "title", tooltip);
+                    builder.AddContent(currentIndex++, part);
+                    builder.CloseElement();
+                }
+                else
+                {
+                    builder.AddContent(currentIndex++, part);
+                }
+            }
+        };
+    }
+}
+
+@code {
+    private RenderFragment MentorDecisionCardSkeleton => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "mentor-card mentor-card--skeleton");
+        
+        // Header skeleton
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "mentor-card__header");
+        builder.AddMarkupContent(4, "<div class='mentor-card__decision-badge skeleton'></div>");
+        builder.AddMarkupContent(5, "<div class='mentor-card__horizon skeleton'></div>");
+        builder.CloseElement();
+        
+        // Sections skeleton
+        for (int i = 0; i < 4; i++)
+        {
+            builder.OpenElement(6 + i, "div");
+            builder.AddAttribute(7 + i, "class", "mentor-card__section");
+            builder.AddMarkupContent(8 + i, "<div class='mentor-card__section-title skeleton'></div>");
+            builder.AddMarkupContent(9 + i, "<div class='mentor-card__bullets'><div class='skeleton'></div><div class='skeleton'></div></div>");
+            builder.CloseElement();
+        }
+        
+        builder.CloseElement();
+    };
+}
+
+<style>
+    .mentor-card {
+        background: #171f33;
+        backdrop-filter: blur(20px);
+        border: 2px solid rgba(0, 255, 163, 0.2);
+        border-radius: 4px;
+        padding: 32px;
+        margin-bottom: 32px;
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 255, 163, 0.08);
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .fade-in {
+        animation: fadeIn 0.4s ease-out;
+    }
+
+    .mentor-card__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .mentor-card__decision-badge {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 32px;
+        border-radius: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s ease;
+    }
+
+    .mentor-card__decision-badge:hover {
+        transform: scale(1.02);
+    }
+
+    .mentor-card__decision-badge--buy {
+        background: rgba(0, 255, 163, 0.12);
+        color: #00FFA3;
+        border: 2px solid rgba(0, 255, 163, 0.45);
+        text-shadow: 0 0 12px rgba(0, 255, 163, 0.4);
+    }
+
+    .mentor-card__decision-badge--reduce {
+        background: rgba(255, 77, 77, 0.12);
+        color: #ff4d4d;
+        border: 2px solid rgba(255, 77, 77, 0.45);
+    }
+
+    .mentor-card__decision-badge--hold {
+        background: rgba(255, 204, 0, 0.12);
+        color: #ffcc00;
+        border: 2px solid rgba(255, 204, 0, 0.45);
+    }
+
+    .mentor-card__decision-badge--avoid {
+        background: rgba(218, 226, 253, 0.08);
+        color: #dae2fd;
+        border: 2px solid rgba(218, 226, 253, 0.25);
+    }
+
+    .mentor-card__decision-text {
+        font-size: 2rem;
+    }
+
+    .mentor-card__confidence {
+        font-size: 1.2rem;
+        opacity: 0.9;
+    }
+
+    .mentor-card__horizon {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .mentor-card__horizon-label {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .mentor-card__horizon-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #dae2fd;
+    }
+
+    .mentor-card__section {
+        margin-bottom: 24px;
+        padding: 20px;
+        background: rgba(11, 19, 38, 0.6);
+        border-radius: 4px;
+        border: 1px solid rgba(0, 255, 163, 0.08);
+        transition: background 0.2s ease;
+    }
+
+    .mentor-card__section:hover {
+        background: rgba(11, 19, 38, 0.85);
+    }
+
+    .mentor-card__section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-size: 0.85rem;
+    }
+
+    .mentor-card__bullets {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .mentor-card__bullet {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 0;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.6;
+        font-size: 0.95rem;
+    }
+
+    .mentor-card__bullet-icon {
+        color: #00FFA3;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .mentor-card__bullet-text {
+        flex: 1;
+    }
+
+    .mentor-card__actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+    }
+
+    .mentor-card__action {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .mentor-card__action-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .mentor-card__action-type {
+        font-weight: 600;
+        font-size: 0.9rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+    .mentor-card__action-type--buy {
+        background: rgba(0, 255, 163, 0.15);
+        color: #00FFA3;
+    }
+
+    .mentor-card__action-type--sell {
+        background: rgba(255, 77, 77, 0.15);
+        color: #ff4d4d;
+    }
+
+    .mentor-card__action-type--stop {
+        background: rgba(255, 77, 77, 0.15);
+        color: #ff4d4d;
+    }
+
+    .mentor-card__action-type--profit {
+        background: rgba(0, 255, 163, 0.15);
+        color: #00FFA3;
+    }
+
+    .mentor-card__action-type--wait {
+        background: rgba(255, 204, 0, 0.15);
+        color: #ffcc00;
+    }
+
+    .mentor-card__action-pct {
+        font-size: 0.85rem;
+        color: #dae2fd;
+        font-weight: 600;
+    }
+
+    .mentor-card__action-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .mentor-card__action-text {
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 0.9rem;
+    }
+
+    .mentor-card__action-price,
+    .mentor-card__action-timeframe {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .mentor-card__scenario-text,
+    .mentor-card__risk-text {
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.7;
+        font-size: 0.95rem;
+        margin: 0;
+    }
+
+    .mentor-card__risk-text {
+        padding-left: 12px;
+        border-left: 3px solid rgba(255, 77, 77, 0.5);
+    }
+
+    .mentor-card__tooltip-trigger {
+        border-bottom: 1px dotted #00FFA3;
+        cursor: help;
+        position: relative;
+    }
+
+    .mentor-card__tooltip-trigger:hover {
+        color: #00FFA3;
+    }
+
+    /* Loading Skeleton */
+    .mentor-card--skeleton {
+        opacity: 0.7;
+    }
+
+    .skeleton {
+        background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.5s ease-in-out infinite;
+        border-radius: 4px;
+        height: 20px;
+        margin-bottom: 12px;
+    }
+
+    @@keyframes skeleton-loading {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .mentor-card {
+            padding: 24px;
+        }
+
+        .mentor-card__header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .mentor-card__decision-badge {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .mentor-card__actions {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

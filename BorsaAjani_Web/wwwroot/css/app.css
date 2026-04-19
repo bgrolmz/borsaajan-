@@ -1,0 +1,598 @@
+/* ===================================
+   OBSIDIAN TERMINAL — Financial Intelligence Suite
+   Design System v1.0
+   =================================== */
+
+/* Import Modern Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* Global Reset & Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Obsidian Terminal Color Palette */
+    --color-bg: #0b1326;
+    --color-surface: #171f33;
+    --color-surface-elevated: #1e2840;
+    --color-primary: #00FFA3;
+    --color-accent: #dae2fd;
+    --color-danger: #ff4d4d;
+    --color-warning: #ffcc00;
+
+    /* Legacy gradient aliases (kept for compatibility) */
+    --gradient-primary: linear-gradient(135deg, #0b1326, #0f1a2e, #131c30);
+    --gradient-secondary: linear-gradient(135deg, #0b1326, #111827);
+
+    /* Glassmorphism (surface-based) */
+    --glass-bg: rgba(23, 31, 51, 0.7);
+    --glass-border: rgba(0, 255, 163, 0.12);
+    --glass-hover: rgba(23, 31, 51, 0.9);
+
+    /* Accent aliases (mapped to new palette) */
+    --accent-cyan: #00FFA3;
+    --accent-blue: #dae2fd;
+    --accent-purple: #dae2fd;
+    --accent-green: #00FFA3;
+
+    /* Status Colors */
+    --color-bullish: #00FFA3;
+    --color-bearish: #ff4d4d;
+    --color-neutral: #8b949e;
+    --color-high-impact: #ff4d4d;
+
+    /* Text Colors */
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.8);
+    --text-muted: rgba(218, 226, 253, 0.55);
+
+    /* Shadows */
+    --shadow-glow: 0 0 20px rgba(0, 255, 163, 0.2);
+    --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-elevated: 0 12px 48px rgba(0, 0, 0, 0.7);
+}
+
+body {
+    font-family: 'Manrope', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--color-bg);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism Card Base */
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 24px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+    background: var(--glass-hover);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card);
+}
+
+/* ===================================
+   WATCHLIST SECTION
+   =================================== */
+
+.watchlist-container {
+    margin: 24px;
+}
+
+.watchlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.watchlist-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.watchlist-title::before {
+    content: '⭐';
+    font-size: 1.8rem;
+}
+
+.btn-add-watchlist {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+    color: #000;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+}
+
+.btn-add-watchlist:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 212, 255, 0.5);
+}
+
+.watchlist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.watchlist-item {
+    background: var(--glass-bg);
+    backdrop-filter: blur(15px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 20px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.watchlist-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.watchlist-item:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-elevated);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.watchlist-item:hover::before {
+    opacity: 1;
+}
+
+.watchlist-symbol {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+}
+
+.watchlist-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.watchlist-price {
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.price-bullish {
+    color: var(--color-bullish);
+}
+
+.price-bearish {
+    color: var(--color-bearish);
+}
+
+.price-change {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.watchlist-ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.badge-bullish {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+    color: var(--color-bullish);
+}
+
+.badge-bearish {
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    color: var(--color-bearish);
+}
+
+.badge-neutral {
+    background: rgba(139, 148, 158, 0.15);
+    border: 1px solid rgba(139, 148, 158, 0.3);
+    color: var(--color-neutral);
+}
+
+/* ===================================
+   NEWS FEED / NOTIFICATION CENTER
+   =================================== */
+
+.news-feed-container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.news-feed-header {
+    margin-bottom: 32px;
+    text-align: center;
+}
+
+.news-feed-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+}
+
+.news-feed-subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+}
+
+.news-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.news-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(15px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 24px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.news-card.high-impact {
+    border: 2px solid var(--color-high-impact);
+    box-shadow: 0 0 30px rgba(255, 71, 87, 0.4);
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(255, 71, 87, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 40px rgba(255, 71, 87, 0.6);
+    }
+}
+
+.news-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-elevated);
+}
+
+.news-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 16px;
+}
+
+.news-impact-badge {
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.impact-high {
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--color-high-impact);
+    border: 1px solid var(--color-high-impact);
+}
+
+.impact-medium {
+    background: rgba(255, 184, 0, 0.2);
+    color: #ffb800;
+    border: 1px solid #ffb800;
+}
+
+.impact-low {
+    background: rgba(139, 148, 158, 0.2);
+    color: var(--color-neutral);
+    border: 1px solid var(--color-neutral);
+}
+
+.news-timestamp {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.news-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.news-symbols {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.symbol-tag {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-cyan);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.news-analysis {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 12px;
+    border-left: 3px solid var(--accent-purple);
+}
+
+.news-analysis-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-purple);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.news-analysis-text {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* ===================================
+   ICONS & TYPOGRAPHY
+   =================================== */
+
+.icon-trend-up::before {
+    content: '📈';
+    margin-right: 4px;
+}
+
+.icon-trend-down::before {
+    content: '📉';
+    margin-right: 4px;
+}
+
+.icon-rocket::before {
+    content: '🚀';
+    margin-right: 4px;
+}
+
+.icon-warning::before {
+    content: '⚠️';
+    margin-right: 4px;
+}
+
+.icon-fire::before {
+    content: '🔥';
+    margin-right: 4px;
+}
+
+.icon-chart::before {
+    content: '📊';
+    margin-right: 4px;
+}
+
+.icon-bell::before {
+    content: '🔔';
+    margin-right: 4px;
+}
+
+/* Typography Enhancements */
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Manrope', 'Inter', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.text-gradient {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ===================================
+   ENHANCED BUTTONS
+   =================================== */
+
+.btn-modern {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary-gradient {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+    color: #000;
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+}
+
+.btn-primary-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 212, 255, 0.5);
+}
+
+.btn-secondary-gradient {
+    background: linear-gradient(135deg, var(--accent-purple), #9d5fff);
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(125, 95, 255, 0.3);
+}
+
+.btn-secondary-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(125, 95, 255, 0.5);
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+}
+
+.btn-ghost:hover {
+    background: var(--glass-hover);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ===================================
+   LOADING STATES
+   =================================== */
+
+.shimmer {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.15) 50%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+
+@media (max-width: 768px) {
+    .watchlist-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .news-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .news-feed-title {
+        font-size: 2rem;
+    }
+}
+
+/* ===================================
+   SCROLLBAR STYLING
+   =================================== */
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ===================================
+   ANIMATIONS
+   =================================== */
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fade-in 0.5s ease-out;
+}
+
+@keyframes slide-in-right {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.slide-in-right {
+    animation: slide-in-right 0.4s ease-out;
+}

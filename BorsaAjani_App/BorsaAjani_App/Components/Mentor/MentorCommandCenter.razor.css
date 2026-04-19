@@ -1,0 +1,44 @@
+.mc{
+  background: linear-gradient(135deg, rgba(13,17,23,.96), rgba(22,27,34,.96));
+  border: 1px solid rgba(88,166,255,.22);
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 16px 60px rgba(0,0,0,.35);
+}
+
+.mc__top{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px}
+
+.mc__badge{
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-width: 160px;
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.mc__badgeText{font-weight: 850; letter-spacing: 2px; font-size: 1.4rem;}
+.mc__badgeSub{margin-top:6px; font-size:.85rem; color: rgba(255,255,255,.72)}
+
+.mc__badge--buy{background: rgba(46,160,67,.16); border-color: rgba(46,160,67,.38); color:#3fb950}
+.mc__badge--hold{background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35); color:#f59e0b}
+.mc__badge--reduce{background: rgba(248,81,73,.14); border-color: rgba(248,81,73,.35); color:#f85149}
+.mc__badge--avoid{background: rgba(139,148,158,.12); border-color: rgba(139,148,158,.35); color:#8b949e}
+
+.mc__meta{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap}
+.mc__metaItem{background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); padding: 10px 12px; border-radius: 12px; min-width: 120px}
+.mc__metaLabel{font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color: rgba(255,255,255,.55)}
+.mc__metaValue{margin-top:6px; font-weight:700; color:#e6edf3}
+
+.mc__section{margin-top:14px; background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06); border-radius: 14px; padding: 14px}
+.mc__sectionTitle{font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; color: rgba(255,255,255,.72); margin-bottom:10px}
+
+.mc__list{margin:0; padding-left: 18px; color: rgba(255,255,255,.86)}
+.mc__list li{margin: 6px 0; line-height: 1.45}
+
+.mc__steps{margin:0; padding-left: 18px; color: rgba(255,255,255,.9)}
+.mc__steps li{margin: 8px 0; line-height: 1.45}
+
+.mc__risk, .mc__trigger{margin-top: 14px; border-radius: 14px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.08)}
+.mc__risk{background: rgba(248,81,73,.08)}
+.mc__riskLabel, .mc__triggerLabel{font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; color: rgba(255,255,255,.65)}
+.mc__riskText, .mc__triggerText{margin-top: 6px; color: rgba(255,255,255,.9); line-height: 1.45}
+.mc__trigger{background: rgba(88,166,255,.08)}

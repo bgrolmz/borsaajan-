@@ -1,0 +1,672 @@
+@page "/"
+@using System.Text.Json
+@using System.Globalization
+@using System.Text.RegularExpressions
+@using BorsaAjani_App.Models
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div class="mentorPage">
+    <header class="mentorHeader">
+        <div class="mentorHeader__top">
+            <div class="mentorBrand">
+                <div class="mentorBrand__title">Borsa Ajanı</div>
+                <div class="mentorBrand__subtitle">Mentor arayüzü • Önce kaybı önle</div>
+            </div>
+
+            <nav class="mentorNav">
+                <NavLink class="mentorNav__link" href="/" Match="NavLinkMatch.All">Tek varlık</NavLink>
+                <NavLink class="mentorNav__link" href="/portfolio">Portföy</NavLink>
+            </nav>
+        </div>
+
+        <div class="mentorControls">
+            <div class="mentorToggle">
+                <button class="mentorToggle__btn @(mod == "STOCK" ? "isActive" : "")" @onclick="ModDegistirSTOCK">Borsa</button>
+                <button class="mentorToggle__btn @(mod == "CRYPTO" ? "isActive" : "")" @onclick="ModDegistirCRYPTO">Kripto</button>
+            </div>
+
+            <div class="mentorInputs">
+                <label class="mentorInput">
+                    <div class="mentorInput__label">Sembol</div>
+                    <input class="mentorInput__control" @bind="sembol" placeholder="@(mod == "STOCK" ? "NVDA" : "BTC")" />
+                </label>
+
+                @if (mod == "STOCK")
+                {
+                    <label class="mentorInput">
+                        <div class="mentorInput__label">Maliyet (opsiyonel)</div>
+                        <input class="mentorInput__control" @bind="maliyet" type="number" step="any" placeholder="176" />
+                    </label>
+                }
+
+                <button class="mentorAnalyze" @onclick="AnalizEt" type="button" disabled="@yukleniyor">
+                    @(yukleniyor ? "Analiz ediliyor…" : "Mentor kararı getir")
+                </button>
+
+                <div class="mentorQuick">
+                    @if (mod == "STOCK")
+                    {
+                        <button class="mentorQuick__btn" @onclick="HizliSecimNVDA">NVDA</button>
+                        <button class="mentorQuick__btn" @onclick="HizliSecimTSLA">TSLA</button>
+                        <button class="mentorQuick__btn" @onclick="HizliSecimAAPL">AAPL</button>
+                    }
+                    else
+                    {
+                        <button class="mentorQuick__btn" @onclick="HizliSecimBTC">BTC</button>
+                        <button class="mentorQuick__btn" @onclick="HizliSecimETH">ETH</button>
+                        <button class="mentorQuick__btn" @onclick="HizliSecimSOL">SOL</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(hataMesaji))
+    {
+        <div class="mentorError">@hataMesaji</div>
+    }
+
+    @if (veri is null || veri.Analiz is null || veri.Analiz.Count == 0)
+    {
+        <div class="mentorEmpty">
+            <div class="mentorEmpty__title">Karar arayüzü hazır.</div>
+            <div class="mentorEmpty__text">Sembol girin ve "Mentor kararı getir" ile başlayın. İlk 10 saniyede <strong>Ne yapmalı / Neden / Ne kadar / Ne zaman</strong> net olsun diye tasarlandı.</div>
+        </div>
+    }
+    else
+    {
+        <div class="mentorGrid">
+            <div class="mentorMain">
+                <MentorCommandCenter
+                    Decision="mentorDecision"
+                    DecisionSubLabel="@mentorDecisionSub"
+                    Confidence="mentorConfidence"
+                    Horizon="@mentorHorizon"
+                    WhyBullets="mentorWhy"
+                    ActionSteps="mentorActions"
+                    RiskNote="@mentorRiskNote"
+                    ReevaluateTrigger="@mentorTrigger" />
+
+                <NewsImpactPanel Items="newsCards" />
+
+                <SimilarPastScenariosPanel Stats="similarStats" Note="@similarNote" />
+            </div>
+
+            <div class="mentorSide">
+                <GlossaryPanel Items="glossary" />
+            </div>
+        </div>
+
+        <EvidenceDrawer Title="Kanıtı göster (sayısal)" OpenByDefault="false" Rows="evidenceRows">
+            <div class="evExtra">
+                <div class="evChart">
+                    <div class="evChart__title">Teknik grafik (6 aylık)</div>
+                    <div class="evChart__hint">Grafik ve tablo sadece kanıttır — karar alanı yukarıdadır.</div>
+                    <div class="evChart__wrap">
+                        <div id="candlestick-chart" style="width: 100%; height: 480px;"></div>
+                    </div>
+                </div>
+            </div>
+        </EvidenceDrawer>
+    }
+</div>
+
+@code {
+    private string mod = "STOCK";
+    private string sembol = "NVDA";
+    private double? maliyet = 176;
+
+    private BorsaYaniti? veri;
+    private BorsaYaniti? marketData;
+
+    private bool yukleniyor;
+    private string hataMesaji = "";
+
+    // Mentor UI state (derived)
+    private MentorDecision mentorDecision = MentorDecision.Hold;
+    private string? mentorDecisionSub;
+    private int mentorConfidence = 50;
+    private string mentorHorizon = "1–2 hafta";
+    private List<string> mentorWhy = new();
+    private List<string> mentorActions = new();
+    private string? mentorRiskNote;
+    private string? mentorTrigger;
+
+    private List<NewsImpactCard> newsCards = new();
+    private SimilarScenarioStats similarStats = new(0, null, null);
+    private string? similarNote;
+    private List<GlossaryPanel.GlossaryItem> glossary = new();
+    private List<EvidenceDrawer.EvidenceRow> evidenceRows = new();
+
+    private void ModDegistir(string yeniMod)
+    {
+        mod = yeniMod;
+        if (mod == "STOCK")
+        {
+            sembol = "NVDA";
+            maliyet = 176;
+        }
+        else
+        {
+            sembol = "BTC";
+            maliyet = null;
+        }
+
+        veri = null;
+        marketData = null;
+        hataMesaji = "";
+        ResetMentorUi();
+        StateHasChanged();
+    }
+
+    private void ModDegistirSTOCK() => ModDegistir("STOCK");
+    private void ModDegistirCRYPTO() => ModDegistir("CRYPTO");
+
+    private void ResetMentorUi()
+    {
+        mentorDecision = MentorDecision.Hold;
+        mentorDecisionSub = null;
+        mentorConfidence = 50;
+        mentorHorizon = "1–2 hafta";
+        mentorWhy = new();
+        mentorActions = new();
+        mentorRiskNote = null;
+        mentorTrigger = null;
+        newsCards = new();
+        similarStats = new(0, null, null);
+        similarNote = null;
+        evidenceRows = new();
+        glossary = BuildGlossary();
+    }
+
+    private async Task AnalizEt()
+    {
+        yukleniyor = true;
+        hataMesaji = "";
+        veri = null;
+        marketData = null;
+        ResetMentorUi();
+        StateHasChanged();
+
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(300) };
+
+            var baseUrl = GetBaseUrl();
+            var analizUrl = $"http://{baseUrl}:8000/analiz/{sembol}?mode={mod}";
+            if (mod == "STOCK" && maliyet.HasValue)
+            {
+                analizUrl += $"&maliyet={maliyet.Value.ToString(CultureInfo.InvariantCulture)}";
+            }
+
+            var analizResponse = await client.GetAsync(analizUrl);
+            if (!analizResponse.IsSuccessStatusCode)
+            {
+                hataMesaji = $"Sunucu hatası: {analizResponse.StatusCode}";
+                return;
+            }
+
+            var analizJson = await analizResponse.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            veri = JsonSerializer.Deserialize<BorsaYaniti>(analizJson, options);
+
+            // Fetch compact news (UI-only enrichment) without changing backend logic
+            var marketUrl = $"http://{baseUrl}:8000/market-data/{sembol}?mode={mod}";
+            try
+            {
+                var marketResponse = await client.GetAsync(marketUrl);
+                if (marketResponse.IsSuccessStatusCode)
+                {
+                    var marketJson = await marketResponse.Content.ReadAsStringAsync();
+                    marketData = JsonSerializer.Deserialize<BorsaYaniti>(marketJson, options);
+                }
+            }
+            catch
+            {
+                // ignore: news is supportive, not required
+            }
+
+            BuildMentorUiFromData();
+
+            if (veri?.Grafik_Verileri != null && veri.Grafik_Verileri.Count > 0)
+            {
+                StateHasChanged();
+                await Task.Delay(350);
+                await RenderChart();
+            }
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = $"Hata: {ex.Message}";
+        }
+        finally
+        {
+            yukleniyor = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetBaseUrl()
+    {
+        var baseUrl = "127.0.0.1";
+        try
+        {
+            if (DeviceInfo.Platform == DevicePlatform.Android)
+                baseUrl = "10.0.2.2";
+        }
+        catch
+        {
+            baseUrl = "127.0.0.1";
+        }
+        return baseUrl;
+    }
+
+    private void BuildMentorUiFromData()
+    {
+        if (veri?.Analiz is null || veri.Analiz.Count == 0) return;
+        var analiz = veri.Analiz[0];
+
+        // Decision + confidence
+        var rawKarar = analiz.Karar;
+        (mentorDecision, mentorDecisionSub) = NormalizeDecision(rawKarar, mod);
+
+        mentorConfidence = SafeClampInt(ParseInt(analiz.Guven_Skoru), 0, 100) ?? 50;
+
+        // Master analysis (preferred)
+        var master = veri.Master_Analysis;
+        string? timeHorizon = null;
+        var support = (double?)null;
+        var resistance = (double?)null;
+        var stopLoss = (double?)null;
+        var takeProfit1 = (double?)null;
+
+        if (master is { } m && !m.IsNullOrUndefined())
+        {
+            var strategy = m.TryGetProperty("strategy");
+            timeHorizon = strategy?.TryGetProperty("time_horizon")?.GetStringOrNull();
+
+            var riskMgmt = strategy?.TryGetProperty("risk_management_tr");
+            stopLoss = riskMgmt?.TryGetProperty("stop_loss")?.GetDoubleOrNull();
+
+            var takeProfits = riskMgmt?.TryGetProperty("take_profit");
+            takeProfit1 = takeProfits?.GetNumberArray().FirstOrDefault();
+
+            var tech = m.TryGetProperty("technical_analysis");
+            support = tech?.TryGetProperty("support_levels")?.GetNumberArray().OrderByDescending(x => x).FirstOrDefault();
+            resistance = tech?.TryGetProperty("resistance_levels")?.GetNumberArray().OrderBy(x => x).FirstOrDefault();
+
+            var summary = m.TryGetProperty("summary");
+            mentorWhy = summary?.TryGetProperty("key_points_tr")?.GetStringArray().Take(3).ToList() ?? new();
+
+            if (mentorWhy.Count == 0)
+            {
+                var oneLiner = summary?.TryGetProperty("one_liner_tr")?.GetStringOrNull();
+                if (!string.IsNullOrWhiteSpace(oneLiner)) mentorWhy.Add(oneLiner!);
+            }
+        }
+
+        mentorHorizon = !string.IsNullOrWhiteSpace(timeHorizon) ? timeHorizon! : "1–2 hafta";
+
+        // News impact cards (from /market-data)
+        newsCards = (marketData?.Ai_Interpreted_News ?? new List<AiInterpretedNewsItem>())
+            .Where(x => !string.IsNullOrWhiteSpace(x.Title))
+            .OrderByDescending(x => x.Importance_Score)
+            .Take(3)
+            .Select(x => new NewsImpactCard(
+                WhatHappened: x.Title!.Trim(),
+                Impact: MapImpact(x.Impact),
+                WhyItMatters: FirstNonEmpty(x.Explanation, x.Reasons?.FirstOrDefault()) ?? "Karar için izlenecek haber başlığı.",
+                Confidence: SafeClampInt(x.Importance_Score, 0, 100) ?? 50
+            ))
+            .ToList();
+
+        // Similar scenarios (single-asset: backend doesn't return stats yet)
+        similarStats = new SimilarScenarioStats(0, null, null);
+        similarNote = "Şu an bu ekran için sayısal benzer-vaka istatistiği gelmiyor (portföy analizinde mevcut).";
+
+        // Action plan (explicit & executable)
+        var sizingPct = ExtractPercent(analiz.Stratejik_Plan) ?? ExtractPercent(analiz.Ozel_Strateji_Detayi);
+
+        var actions = new List<string>();
+
+        if (mentorDecision == MentorDecision.Buy)
+        {
+            var pct = sizingPct ?? 25;
+            actions.Add($"Alım: mevcut pozisyon değerinin %{pct} kadarını ekle (tek sefer değil, kademeli)." );
+        }
+        else if (mentorDecision == MentorDecision.Reduce)
+        {
+            var pct = sizingPct ?? 20;
+            actions.Add($"Azalt: pozisyonun %{pct} kadarını küçült (amaç: kaybı büyütmeden riski düşürmek)." );
+        }
+        else if (mentorDecision == MentorDecision.Avoid)
+        {
+            actions.Add("Yeni pozisyon açma: bu varlıkta işlem yapma.");
+        }
+        else
+        {
+            actions.Add("Şüphe varsa: işlem yapma (NO ACTION)." );
+        }
+
+        if (stopLoss.HasValue)
+            actions.Add($"Stop-Loss (zarar kes): {stopLoss.Value.ToString("F2", CultureInfo.InvariantCulture)} seviyesine koy." );
+        else if (!string.IsNullOrWhiteSpace(analiz.Stop_Loss) && analiz.Stop_Loss != "N/A")
+            actions.Add($"Stop-Loss (zarar kes): {analiz.Stop_Loss} seviyesine koy." );
+        else if (support.HasValue)
+            actions.Add($"Stop-Loss (zarar kes): {support.Value.ToString("F2", CultureInfo.InvariantCulture)} desteğinin altına sarkarsa planlı çık." );
+        else
+            actions.Add("Stop-Loss (zarar kes): destek kırılımında planlı çıkış seviyesi belirle." );
+
+        if (takeProfit1.HasValue)
+            actions.Add($"Take-Profit (kâr al, opsiyonel): {takeProfit1.Value.ToString("F2", CultureInfo.InvariantCulture)} seviyesinde kısmi kâr kilitle." );
+
+        actions.Add("Yeniden kontrol: 3 gün sonra (veya fiyat/ haber koşulu değişirse daha erken)." );
+
+        mentorActions = actions.Take(4).ToList();
+
+        // Risk note + trigger (worst-case first)
+        mentorRiskNote = BuildRiskNote(mentorDecision, analiz.Risk_Uyarisi);
+        mentorTrigger = BuildTrigger(mentorDecision, support, resistance, marketData?.Haber_Skoru ?? veri.Haber_Skoru);
+
+        // Evidence rows (single compact table)
+        evidenceRows = BuildEvidenceRows(
+            symbol: veri.Sembol ?? sembol,
+            price: veri.Fiyat_Bilgisi?.Fiyat,
+            rsi: veri.Fiyat_Bilgisi?.Rsi,
+            bbLow: veri.Fiyat_Bilgisi?.Bb_Alt,
+            bbHigh: veri.Fiyat_Bilgisi?.Bb_Ust,
+            vix: veri.Piyasa_Bilgisi?.Vix,
+            market: veri.Piyasa_Bilgisi?.Piyasa_Durumu,
+            newsScore: marketData?.Haber_Skoru != 0 ? marketData!.Haber_Skoru : veri.Haber_Skoru,
+            stopLoss: stopLoss,
+            takeProfit: takeProfit1,
+            support: support,
+            resistance: resistance,
+            rawDecision: mentorDecisionSub
+        );
+
+        glossary = BuildGlossary();
+    }
+
+    private static (MentorDecision decision, string? subLabel) NormalizeDecision(string? legacyKarar, string currentMod)
+    {
+        var k = (legacyKarar ?? "").Trim().ToUpperInvariant();
+
+        if (currentMod == "CRYPTO")
+        {
+            if (k.Contains("LONG")) return (MentorDecision.Buy, legacyKarar);
+            if (k.Contains("SHORT")) return (MentorDecision.Reduce, legacyKarar);
+            return (MentorDecision.Hold, legacyKarar);
+        }
+
+        if (k.Contains("AL") || k == "BUY") return (MentorDecision.Buy, legacyKarar);
+        if (k.Contains("SAT") || k == "SELL") return (MentorDecision.Reduce, legacyKarar);
+        if (k.Contains("AVOID")) return (MentorDecision.Avoid, legacyKarar);
+        return (MentorDecision.Hold, legacyKarar);
+    }
+
+    private static NewsImpact MapImpact(string? impact)
+    {
+        var s = (impact ?? "").Trim().ToLowerInvariant();
+        return s switch
+        {
+            "pozitif" or "bullish" or "positive" => NewsImpact.Bullish,
+            "negatif" or "bearish" or "negative" => NewsImpact.Bearish,
+            _ => NewsImpact.Neutral
+        };
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();
+
+    private static int? ParseInt(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        var cleaned = s.Trim().Replace("%", "");
+        if (int.TryParse(cleaned, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)) return i;
+        if (double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)) return (int)d;
+        return null;
+    }
+
+    private static int? SafeClampInt(int? value, int min, int max)
+    {
+        if (value is null) return null;
+        return Math.Min(max, Math.Max(min, value.Value));
+    }
+
+    private static int? SafeClampInt(int value, int min, int max)
+        => Math.Min(max, Math.Max(min, value));
+
+    private static int? ExtractPercent(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var m = Regex.Match(text, @"%(\s*)?(\d{1,3})");
+        if (m.Success && int.TryParse(m.Groups[2].Value, out var pct))
+            return Math.Min(100, Math.Max(1, pct));
+
+        m = Regex.Match(text, @"(\d{1,3})\s*%" );
+        if (m.Success && int.TryParse(m.Groups[1].Value, out pct))
+            return Math.Min(100, Math.Max(1, pct));
+
+        return null;
+    }
+
+    private static string BuildRiskNote(MentorDecision decision, string? backendRisk)
+    {
+        var baseNote = decision switch
+        {
+            MentorDecision.Buy => "En kötü senaryo: destek kırılır ve fiyat hızlanır; kademesiz ekleme zararı büyütebilir.",
+            MentorDecision.Reduce => "En kötü senaryo: düşüş devam eder; azaltmamak konsantrasyon riskini büyütür.",
+            MentorDecision.Avoid => "En kötü senaryo: yüksek oynaklıkta yanlış giriş, hızlı kayıpla sonuçlanır.",
+            _ => "En kötü senaryo: belirsizlikte işlem yapmak, hatalı giriş/çıkışla kayıp yazdırır."
+        };
+
+        if (!string.IsNullOrWhiteSpace(backendRisk) && backendRisk != "N/A")
+            return $"{baseNote} {backendRisk}";
+
+        return baseNote;
+    }
+
+    private static string BuildTrigger(MentorDecision decision, double? support, double? resistance, int newsScore)
+    {
+        var s = support.HasValue ? support.Value.ToString("F2", CultureInfo.InvariantCulture) : "destek";
+        var r = resistance.HasValue ? resistance.Value.ToString("F2", CultureInfo.InvariantCulture) : "direnç";
+
+        return decision switch
+        {
+            MentorDecision.Buy => $"Fiyat {s} altına kapanırsa veya haber skoru {newsScore}/100 seviyesinden belirgin kötüleşirse.",
+            MentorDecision.Reduce => $"Fiyat {r} altında zayıf kalırsa veya konsantrasyon/risk artarsa.",
+            MentorDecision.Avoid => $"Oynaklık düşüp haber etkisi nötrleşmeden önce karar değişmez.",
+            _ => $"Fiyat {s} desteğini kırarsa veya haber etkisi yön değiştirirse."
+        };
+    }
+
+    private static List<EvidenceDrawer.EvidenceRow> BuildEvidenceRows(
+        string symbol,
+        double? price,
+        double? rsi,
+        double? bbLow,
+        double? bbHigh,
+        double? vix,
+        string? market,
+        int newsScore,
+        double? stopLoss,
+        double? takeProfit,
+        double? support,
+        double? resistance,
+        string? rawDecision)
+    {
+        var rows = new List<EvidenceDrawer.EvidenceRow>
+        {
+            new("Sembol", symbol),
+            new("Karar (ham)", rawDecision ?? "—"),
+            new("Fiyat", price.HasValue ? price.Value.ToString("F4", CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.') : "—"),
+            new("RSI", rsi.HasValue ? rsi.Value.ToString("F1", CultureInfo.InvariantCulture) : "—"),
+            new("Bollinger Alt", bbLow.HasValue ? bbLow.Value.ToString("F2", CultureInfo.InvariantCulture) : "—"),
+            new("Bollinger Üst", bbHigh.HasValue ? bbHigh.Value.ToString("F2", CultureInfo.InvariantCulture) : "—"),
+            new("Volatility (VIX)", vix.HasValue && vix.Value > 0 ? vix.Value.ToString("F1", CultureInfo.InvariantCulture) : "—"),
+            new("Piyasa", string.IsNullOrWhiteSpace(market) ? "—" : market!),
+            new("Haber skoru", $"{newsScore}/100"),
+            new("Stop-Loss (zarar kes)", stopLoss.HasValue ? stopLoss.Value.ToString("F2", CultureInfo.InvariantCulture) : "—"),
+            new("Take-Profit (kâr al)", takeProfit.HasValue ? takeProfit.Value.ToString("F2", CultureInfo.InvariantCulture) : "—"),
+            new("Destek", support.HasValue ? support.Value.ToString("F2", CultureInfo.InvariantCulture) : "—"),
+            new("Direnç", resistance.HasValue ? resistance.Value.ToString("F2", CultureInfo.InvariantCulture) : "—"),
+        };
+
+        return rows;
+    }
+
+    private static List<GlossaryPanel.GlossaryItem> BuildGlossary()
+        => new()
+        {
+            new("Stop-Loss (SL)", "Zarar kes seviyesi.", "Seviyeyi önceden belirle; \"umarım döner\" diye büyütme.", "Stop-Loss = exit to cap loss"),
+            new("Take-Profit (TP)", "Kâr al seviyesi.", "Kademeli kâr al; hepsini tek noktaya bağlama.", "Take-Profit = exit to lock gains"),
+            new("RSI", "Momentum göstergesi.", "<30 aşırı satım, >70 aşırı alım (garanti değil).", "RSI = Relative Strength Index"),
+            new("Bollinger Bands", "Fiyatın oynaklık bandı.", "Bant dışı kapanışlar + bant genişlemesi = risk artışı.", "Bollinger Bands = volatility bands"),
+            new("ATR", "Ortalama günlük dalga boyu (oynaklık).", "ATR yükseliyorsa stop mesafesini daraltmak risklidir.", "ATR = Average True Range"),
+            new("Drawdown", "Zirveden düşüş oranı.", "Yeni zirve gelmiyorsa kaybı büyütmeden risk azalt.", "Drawdown = peak-to-trough decline"),
+            new("Volatility", "Fiyatın dalgalanma şiddeti.", "Oynaklık yüksekse pozisyon boyutunu küçült.", "Volatility = variability of returns"),
+        };
+
+    private void HizliSecim(string sembolSecim)
+    {
+        sembol = sembolSecim;
+        StateHasChanged();
+    }
+
+    private void HizliSecimNVDA() => HizliSecim("NVDA");
+    private void HizliSecimTSLA() => HizliSecim("TSLA");
+    private void HizliSecimAAPL() => HizliSecim("AAPL");
+    private void HizliSecimBTC() => HizliSecim("BTC");
+    private void HizliSecimETH() => HizliSecim("ETH");
+    private void HizliSecimSOL() => HizliSecim("SOL");
+
+    private async Task RenderChart()
+    {
+        if (veri?.Grafik_Verileri == null || veri.Grafik_Verileri.Count == 0)
+            return;
+
+        try
+        {
+            var elementExists = await JSRuntime.InvokeAsync<bool>("checkElementExists", "candlestick-chart");
+            if (!elementExists)
+            {
+                for (var i = 0; i < 5; i++)
+                {
+                    await Task.Delay(200);
+                    elementExists = await JSRuntime.InvokeAsync<bool>("checkElementExists", "candlestick-chart");
+                    if (elementExists) break;
+                }
+                if (!elementExists) return;
+            }
+
+            var apexChartsLoaded = await JSRuntime.InvokeAsync<bool>("checkApexChartsLoaded");
+            if (!apexChartsLoaded)
+            {
+                for (var i = 0; i < 5; i++)
+                {
+                    await Task.Delay(300);
+                    apexChartsLoaded = await JSRuntime.InvokeAsync<bool>("checkApexChartsLoaded");
+                    if (apexChartsLoaded) break;
+                }
+                if (!apexChartsLoaded)
+                {
+                    hataMesaji = "ApexCharts yüklenemedi. İnternet bağlantınızı kontrol edin.";
+                    return;
+                }
+            }
+
+            var chartData = veri.Grafik_Verileri
+                .Where(v => !string.IsNullOrEmpty(v.Date))
+                .Select(v =>
+                {
+                    if (DateTime.TryParse(v.Date, out var date))
+                    {
+                        var timestamp = ((DateTimeOffset)date).ToUnixTimeMilliseconds();
+                        return new { x = timestamp, y = new[] { v.Open, v.High, v.Low, v.Close } };
+                    }
+                    return null;
+                })
+                .Where(x => x != null)
+                .ToArray();
+
+            var volumeData = veri.Grafik_Verileri
+                .Where(v => !string.IsNullOrEmpty(v.Date))
+                .Select(v =>
+                {
+                    if (DateTime.TryParse(v.Date, out var date))
+                    {
+                        var timestamp = ((DateTimeOffset)date).ToUnixTimeMilliseconds();
+                        return new { x = timestamp, y = v.Volume };
+                    }
+                    return null;
+                })
+                .Where(x => x != null)
+                .ToArray();
+
+            await JSRuntime.InvokeVoidAsync("renderCandlestickChart", chartData, volumeData, sembol ?? "ASSET");
+        }
+        catch (Exception ex)
+        {
+            hataMesaji = $"Grafik hatası: {ex.Message}";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JSRuntime.InvokeVoidAsync("destroyChart"); } catch { }
+    }
+}
+
+<style>
+.mentorPage{min-height:100vh;background:linear-gradient(135deg,#0a0e1a 0%,#0d1117 55%,#161b22 100%);padding:12px;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif}
+
+.mentorHeader{background:rgba(22,27,34,.6);border:1px solid rgba(48,54,61,.55);border-radius:16px;padding:14px 16px;margin-bottom:12px;backdrop-filter:blur(10px)}
+.mentorHeader__top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+
+.mentorBrand__title{font-weight:850;color:#fff;font-size:1.35rem;letter-spacing:-.02em}
+.mentorBrand__subtitle{margin-top:4px;color:rgba(255,255,255,.65);font-size:.9rem}
+
+.mentorNav{display:flex;gap:10px;align-items:center}
+.mentorNav__link{padding:8px 12px;border-radius:10px;text-decoration:none;color:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.10);background:rgba(13,17,23,.25)}
+.mentorNav__link.active{color:#fff;border-color:rgba(88,166,255,.45);background:rgba(88,166,255,.12)}
+
+.mentorControls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}
+
+.mentorToggle{display:flex;gap:8px}
+.mentorToggle__btn{background:rgba(33,38,45,.7);color:#8b949e;border:1px solid rgba(48,54,61,.6);padding:7px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+.mentorToggle__btn.isActive{background:linear-gradient(135deg, rgba(88,166,255,.18), rgba(56,139,253,.18));color:#fff;border-color:rgba(88,166,255,.5)}
+
+.mentorInputs{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;flex:1}
+.mentorInput{display:flex;flex-direction:column;gap:6px;background:rgba(13,17,23,.45);border:1px solid rgba(48,54,61,.55);border-radius:12px;padding:10px 12px}
+.mentorInput__label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55)}
+.mentorInput__control{background:transparent;border:none;outline:none;color:#fff;min-width:120px}
+
+.mentorAnalyze{background:linear-gradient(135deg,#238636,#2ea043);color:#fff;border:none;padding:11px 16px;border-radius:12px;font-weight:850;cursor:pointer}
+.mentorAnalyze:disabled{opacity:.6;cursor:not-allowed}
+
+.mentorQuick{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.mentorQuick__btn{background:rgba(33,38,45,.55);color:#c9d1d9;border:1px solid rgba(48,54,61,.55);padding:7px 12px;border-radius:999px;cursor:pointer;font-weight:650}
+
+.mentorError{margin-bottom:12px;background:rgba(218,54,51,.22);border:1px solid rgba(248,81,73,.45);color:#fff;padding:12px 14px;border-radius:14px}
+
+.mentorEmpty{background:rgba(22,27,34,.45);border:1px solid rgba(48,54,61,.55);border-radius:16px;padding:18px}
+.mentorEmpty__title{font-weight:850;color:#fff;font-size:1.15rem}
+.mentorEmpty__text{margin-top:10px;color:rgba(255,255,255,.72);line-height:1.45}
+
+.mentorGrid{display:grid;grid-template-columns: 1.7fr 1fr; gap: 12px; align-items:start}
+.mentorMain{display:flex;flex-direction:column;gap:12px}
+.mentorSide{position:sticky;top:12px}
+
+.evExtra{display:flex;flex-direction:column;gap:12px}
+.evChart{background:rgba(13,17,23,.35);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px}
+.evChart__title{font-weight:800;color:#e6edf3}
+.evChart__hint{margin-top:4px;color:rgba(255,255,255,.6);font-size:.88rem}
+.evChart__wrap{margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+
+@@media (max-width: 1100px){
+  .mentorGrid{grid-template-columns: 1fr}
+  .mentorSide{position:static}
+}
+</style>

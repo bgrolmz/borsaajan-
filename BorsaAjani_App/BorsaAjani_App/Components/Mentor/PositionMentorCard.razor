@@ -1,0 +1,81 @@
+@using BorsaAjani_App.Models
+
+<div class="pc">
+    <div class="pc__top">
+        <div class="pc__left">
+            <div class="pc__symbol">@Symbol</div>
+            @if (!string.IsNullOrWhiteSpace(NewsLine))
+            {
+                <div class="pc__news">@NewsLine</div>
+            }
+        </div>
+
+        <div class="pc__right">
+            <div class="pc__badge @DecisionCss">@DecisionLabel</div>
+            <div class="pc__meta">
+                <div class="pc__metaItem">
+                    <div class="pc__metaLabel">Güven</div>
+                    <div class="pc__metaValue">@(Confidence is null ? "—" : $"{Confidence}%")</div>
+                </div>
+                <div class="pc__metaItem">
+                    <div class="pc__metaLabel">Ufuk</div>
+                    <div class="pc__metaValue">@Horizon</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (WhyBullets?.Count > 0)
+    {
+        <div class="pc__section">
+            <div class="pc__sectionTitle">Neden</div>
+            <ul class="pc__list">
+                @foreach (var w in WhyBullets.Take(2))
+                {
+                    <li>@w</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (ActionSteps?.Count > 0)
+    {
+        <div class="pc__section">
+            <div class="pc__sectionTitle">Eylem</div>
+            <ul class="pc__list">
+                @foreach (var a in ActionSteps.Take(3))
+                {
+                    <li>@a</li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Symbol { get; set; } = "—";
+    [Parameter] public MentorDecision Decision { get; set; } = MentorDecision.Hold;
+    [Parameter] public int? Confidence { get; set; }
+    [Parameter] public string Horizon { get; set; } = "7 gün";
+
+    [Parameter] public List<string> WhyBullets { get; set; } = new();
+    [Parameter] public List<string> ActionSteps { get; set; } = new();
+
+    [Parameter] public string? NewsLine { get; set; }
+
+    private string DecisionCss => Decision switch
+    {
+        MentorDecision.Buy => "pc__badge--buy",
+        MentorDecision.Reduce => "pc__badge--reduce",
+        MentorDecision.Avoid => "pc__badge--avoid",
+        _ => "pc__badge--hold"
+    };
+
+    private string DecisionLabel => Decision switch
+    {
+        MentorDecision.Buy => "BUY",
+        MentorDecision.Reduce => "REDUCE",
+        MentorDecision.Avoid => "AVOID",
+        _ => "HOLD"
+    };
+}

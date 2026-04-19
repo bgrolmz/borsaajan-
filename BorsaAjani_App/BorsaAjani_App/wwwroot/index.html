@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>BorsaAjani_App</title>
+    <base href="/" />
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="BorsaAjani_App.styles.css" />
+    <link rel="icon" href="data:,">
+</head>
+
+<body>
+
+    <div class="status-bar-safe-area"></div>
+
+    <div id="app">Loading...</div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script>
+        let chartInstance = null;
+
+        window.renderCandlestickChart = (candlestickData, volumeData, symbol) => {
+            console.log('renderCandlestickChart called', { 
+                candlestickDataLength: candlestickData?.length || 0, 
+                volumeDataLength: volumeData?.length || 0,
+                symbol: symbol 
+            });
+
+            // Destroy existing chart if any
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+
+            const chartElement = document.getElementById('candlestick-chart');
+            if (!chartElement) {
+                console.error('Chart element not found!');
+                return;
+            }
+
+            console.log('Chart element found, creating chart...');
+
+            const options = {
+                series: [
+                    {
+                        name: 'Candlestick',
+                        type: 'candlestick',
+                        data: candlestickData
+                    },
+                    {
+                        name: 'Volume',
+                        type: 'column',
+                        data: volumeData
+                    }
+                ],
+                chart: {
+                    type: 'candlestick',
+                    height: 500,
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            zoom: true,
+                            zoomin: true,
+                            zoomout: true,
+                            pan: true,
+                            reset: true
+                        }
+                    },
+                    zoom: {
+                        enabled: true,
+                        type: 'x'
+                    }
+                },
+                theme: {
+                    mode: 'dark',
+                    palette: 'palette1'
+                },
+                plotOptions: {
+                    candlestick: {
+                        colors: {
+                            upward: '#3fb950',
+                            downward: '#f85149'
+                        }
+                    }
+                },
+                xaxis: {
+                    type: 'datetime',
+                    labels: {
+                        style: {
+                            colors: '#c9d1d9'
+                        }
+                    }
+                },
+                yaxis: [
+                    {
+                        title: {
+                            text: 'Price',
+                            style: {
+                                color: '#c9d1d9'
+                            }
+                        },
+                        labels: {
+                            style: {
+                                colors: '#c9d1d9'
+                            }
+                        }
+                    },
+                    {
+                        opposite: true,
+                        title: {
+                            text: 'Volume',
+                            style: {
+                                color: '#c9d1d9'
+                            }
+                        },
+                        labels: {
+                            style: {
+                                colors: '#c9d1d9'
+                            }
+                        }
+                    }
+                ],
+                tooltip: {
+                    theme: 'dark',
+                    x: {
+                        format: 'dd MMM yyyy'
+                    },
+                    y: {
+                        formatter: function (val, { seriesIndex }) {
+                            if (seriesIndex === 0) {
+                                return '$' + val.toFixed(2);
+                            }
+                            return val.toLocaleString();
+                        }
+                    }
+                },
+                grid: {
+                    borderColor: '#30363d',
+                    strokeDashArray: 4
+                },
+                colors: ['#3fb950', '#58a6ff']
+            };
+
+            chartInstance = new ApexCharts(chartElement, options);
+            chartInstance.render().then(() => {
+                console.log('Chart rendered successfully');
+            }).catch((error) => {
+                console.error('Chart render error:', error);
+            });
+        };
+
+        window.destroyChart = () => {
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+        };
+
+        // Helper function to check if element exists
+        window.checkElementExists = (elementId) => {
+            return document.getElementById(elementId) !== null;
+        };
+
+        // Helper function to check if ApexCharts is loaded
+        window.checkApexChartsLoaded = () => {
+            return typeof ApexCharts !== 'undefined';
+        };
+    </script>
+
+</body>
+
+</html>

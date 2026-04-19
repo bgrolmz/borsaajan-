@@ -1,0 +1,34 @@
+<div class="gloss">
+    <div class="gloss__title">Terimlerin anlamı</div>
+    <div class="gloss__subtitle">Teknik terim = kısa anlam + neye bakmalı.</div>
+
+    <div class="gloss__items">
+        @foreach (var item in Items)
+        {
+            <div class="gloss__item">
+                <div class="gloss__term">
+                    <span class="gloss__termName" title="@item.Tooltip">@item.Term</span>
+                </div>
+                <div class="gloss__meaning">@item.Meaning</div>
+                <div class="gloss__watch">@item.WhatToWatch</div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    public sealed record GlossaryItem(string Term, string Meaning, string WhatToWatch, string Tooltip);
+
+    [Parameter] public List<GlossaryItem> Items { get; set; } = DefaultItems();
+
+    private static List<GlossaryItem> DefaultItems() => new()
+    {
+        new("Stop-Loss (SL)", "Zarar kes seviyesi.", "Seviyeyi önceden belirle; \"umarım döner\" diye büyütme.", "Stop-Loss = exit to cap loss"),
+        new("Take-Profit (TP)", "Kâr al seviyesi.", "Kademeli kâr al; hepsini tek noktaya bağlama.", "Take-Profit = exit to lock gains"),
+        new("RSI", "Momentum göstergesi.", "<30 aşırı satım, >70 aşırı alım (garanti değil).", "RSI = Relative Strength Index"),
+        new("Bollinger Bands", "Fiyatın oynaklık bandı.", "Bant dışı kapanışlar + bant genişlemesi = risk artışı.", "Bollinger Bands = volatility bands"),
+        new("ATR", "Ortalama günlük dalga boyu (oynaklık).", "ATR yükseliyorsa stop mesafesini daraltmak risklidir.", "ATR = Average True Range"),
+        new("Drawdown", "Zirveden düşüş oranı.", "Yeni zirve gelmiyorsa kaybı büyütmeden risk azalt.", "Drawdown = peak-to-trough decline"),
+        new("Volatility", "Fiyatın dalgalanma şiddeti.", "Oynaklık yüksekse pozisyon boyutunu küçült.", "Volatility = variability of returns"),
+    };
+}
