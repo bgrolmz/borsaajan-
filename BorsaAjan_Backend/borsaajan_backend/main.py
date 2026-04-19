@@ -2026,16 +2026,49 @@ def webhook_news_signal(
         print(f"⛔ [webhook] Yetkisiz istek — kaynak: {payload.kaynak or 'bilinmiyor'}")
         raise HTTPException(status_code=401, detail="Geçersiz veya eksik X-Webhook-Secret")
 
-    symbol = payload.hisse_adi.upper().strip()
+    _SYMBOL_KEYWORDS: dict[str, list[str]] = {
+        "NVDA": ["nvidia", "nvda"],
+        "AAPL": ["apple", "aapl", "iphone", "ipad", "macbook"],
+        "GOOGL": ["google", "googl", "alphabet", "goog"],
+        "GOOG": ["google", "googl", "alphabet", "goog"],
+        "TSLA": ["tesla", "tsla", "elon musk"],
+        "MSFT": ["microsoft", "msft", "azure", "windows"],
+        "AMZN": ["amazon", "amzn", "aws"],
+        "META": ["meta", "facebook", "instagram", "whatsapp"],
+        "AMD": ["amd", "advanced micro"],
+        "INTC": ["intel", "intc"],
+        "NFLX": ["netflix", "nflx"],
+        "CRM": ["salesforce", "crm"],
+        "ORCL": ["oracle", "orcl"],
+        "QCOM": ["qualcomm", "qcom"],
+    }
+
+    def _detect_symbol(text: str, raw_symbol: str) -> str:
+        rs = raw_symbol.upper().strip()
+        if rs and rs not in ("UNKNOWN", "N/A", "NONE", ""):
+            text_lower = text.lower()
+            for sym, keywords in _SYMBOL_KEYWORDS.items():
+                if any(kw in text_lower for kw in keywords):
+                    return sym
+            return rs
+        text_lower = text.lower()
+        for sym, keywords in _SYMBOL_KEYWORDS.items():
+            if any(kw in text_lower for kw in keywords):
+                return sym
+        try:
+            from .news_pipeline import detect_symbol_from_text
+            detected = detect_symbol_from_text(text)
+            if detected:
+                return detected.upper().strip()
+        except Exception:
+            pass
+        first_word = text.split()[0].upper() if text.split() else rs
+        return first_word or rs
+
+    symbol = _detect_symbol(payload.haber_metni.strip(), payload.hisse_adi)
     haber  = payload.haber_metni.strip()
     kaynak = payload.kaynak.strip() or "n8n"
-
-    if not symbol or symbol in ("UNKNOWN", "N/A", "NONE", ""):
-        from .news_pipeline import detect_symbol_from_text
-        detected = detect_symbol_from_text(haber)
-        if detected:
-            symbol = detected.upper().strip()
-            print(f"🔍 [webhook] Sembol başlıktan tespit edildi: {symbol}")
+    print(f"🔍 [webhook] Sembol: {symbol}")
 
     print(f"📡 [webhook] Sinyal alındı — sembol={symbol}, kaynak={kaynak}, haber={haber[:80]}...")
 
@@ -2052,7 +2085,6 @@ def webhook_news_signal(
 
         raw_impact = (llm.get("impact") or "").lower()
         impact = "POSITIVE" if "bullish" in raw_impact else ("NEGATIVE" if "bearish" in raw_impact else "NEUTRAL")
-        llm_impact_label = llm.get("impact", impact)
         reason = llm.get("reason", "")
         action_plan = llm.get("action_plan", "")
         mentor_scenario = llm.get("mentor_scenario", "")
@@ -2061,7 +2093,6 @@ def webhook_news_signal(
         technical_rsi = llm.get("technical_rsi", "N/A")
         technical_resistance = llm.get("technical_resistance", "N/A")
         confidence = 70
-        why_it_matters = reason
         strategic_advice = action_plan
         comment = mentor_scenario
 
@@ -2087,29 +2118,17 @@ def webhook_news_signal(
             print(f"⚠️ [webhook] Fiyat alınamadı, snapshot atlandı")
 
         impact_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(impact, "🟡")
-        risk_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(risk_level, "🟡")
+        impact_label_tr = {"POSITIVE": "Pozitif", "NEGATIVE": "Negatif"}.get(impact, "Nötr")
 
-        telegram_lines = [
-            f"{impact_emoji} *{symbol}* — {llm_impact_label}",
-            f"📊 Fiyat: {price_now if price_now else 'N/A'} | RSI: {technical_rsi} | Direnç: {technical_resistance}",
-        ]
-        if why_it_matters:
-            telegram_lines.append(f"🔎 {why_it_matters[:200]}")
-        if reason:
-            telegram_lines.append(f"📌 Analiz: {reason[:220]}")
-        if action_plan:
-            telegram_lines.append(f"🎯 Plan: {action_plan[:180]}")
-        if mentor_scenario:
-            telegram_lines.append(f"🔭 Senaryo: {mentor_scenario[:180]}")
-        if risk_detail:
-            telegram_lines.append(f"{risk_emoji} Risk ({risk_level}): {risk_detail[:160]}")
-        if strategic_advice:
-            telegram_lines.append(f"⚠️ {strategic_advice[:200]}")
-        if comment:
-            telegram_lines.append(f"💬 {comment[:200]}")
-        telegram_lines.append(f"Güven: {confidence}% | Kaynak: {kaynak}")
-
-        telegram_body = "\n".join(telegram_lines)
+        telegram_body = (
+            f"📋 *{symbol}*\n"
+            f"{haber[:200]}\n\n"
+            f"Etki: {impact_emoji} {impact_label_tr}\n"
+            f"Sebep: {reason[:220]}\n"
+            f"Mentor Görüşü: {mentor_scenario[:180]}\n"
+            f"📊 Fiyat: {price_now if price_now else 'N/A'} | RSI: {technical_rsi} | Direnç: {technical_resistance}\n"
+            f"🎯 Plan: {action_plan[:180]}"
+        )
 
         from .notification_service import send_and_save_notification
         notif_result = send_and_save_notification(

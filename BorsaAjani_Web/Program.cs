@@ -13,7 +13,7 @@ builder.Services.AddSingleton<ChatContextService>();
 
 // Configure HttpClient for backend API
 // Use BACKEND_API_URL environment variable if set, otherwise default to localhost
-var backendApiUrl = Environment.GetEnvironmentVariable("BACKEND_API_URL") ?? "http://127.0.0.1:8000";
+var backendApiUrl = Environment.GetEnvironmentVariable("BACKEND_API_URL") ?? "https://borsaajan-production.up.railway.app";
 Console.WriteLine($"[Config] Backend API URL: {backendApiUrl}");
 
 builder.Services.AddHttpClient("BackendApi", client =>
