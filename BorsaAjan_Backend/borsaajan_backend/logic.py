@@ -969,8 +969,7 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
         result.setdefault("technical_resistance", str(sma))
         return result
     except Exception as e:
-        print(f"❌ [analyze_news_with_gemini] {symbol}: {e}")
-        return None
+        raise RuntimeError(f"[analyze_news_with_gemini] {symbol}: {e}") from e
 
 def get_last_known_price_from_db(symbol: str) -> Optional[float]:
     """
