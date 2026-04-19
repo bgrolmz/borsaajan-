@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "BorsaAjani_Web": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:7097;http://localhost:5097",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "BACKEND_API_URL": "https://borsaajan-production.up.railway.app"
+      }
+    }
+  }
+}
