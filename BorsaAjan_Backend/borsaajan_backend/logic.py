@@ -940,9 +940,6 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
     client = _get_genai_client()
     if not client:
         return None
-    discovered_model = _discover_model(client, prefer_flash=True)
-    if not discovered_model:
-        return None
 
     time.sleep(3)
 
@@ -954,7 +951,7 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
 
     try:
         response = client.models.generate_content(
-            model=discovered_model,
+            model="gemini-1.5-flash",
             contents=prompt,
             config=config,
         )
