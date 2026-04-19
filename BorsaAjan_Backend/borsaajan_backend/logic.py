@@ -920,21 +920,15 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
     sma = tech.get("sma", "N/A")
 
     prompt = (
-        f"Sen bir borsa analistisin. Haberi ve güncel teknik verileri (Fiyat, RSI, SMA) harmanla.\n\n"
-        f"Hisse: {symbol}\n"
-        f"Haber: {news_text}\n"
-        f"Güncel Fiyat: {price}\n"
-        f"RSI (14): {rsi}\n"
-        f"SMA (20): {sma}\n\n"
-        f'Yanıtını YALNIZCA şu JSON formatında ver:\n'
-        f'{{"symbol": "{symbol}", "impact": "Bullish/Bearish/Neutral", '
-        f'"reason": "Rakamlarla teknik ve temel analiz yorumu.", '
-        f'"risk_level": "High/Medium/Low", '
-        f'"risk_detail": "Risk durumu açıklaması", '
-        f'"action_plan": "Strateji", '
-        f'"mentor_scenario": "Oyun planı", '
-        f'"technical_rsi": "{rsi}", '
-        f'"technical_resistance": "{sma}"}}'
+        f"You are a stock market analyst. Analyze the news and technical data below. "
+        f"Respond ONLY with valid JSON, no extra text.\n\n"
+        f"Symbol: {symbol}\n"
+        f"News: {news_text}\n"
+        f"Price: {price}\n"
+        f"RSI(14): {rsi}\n"
+        f"SMA(20): {sma}\n\n"
+        f"Return exactly this JSON structure with your analysis (keep values concise, under 100 chars each):\n"
+        f'{{"symbol":"{symbol}","impact":"Bullish","reason":"brief technical+fundamental reason","risk_level":"Medium","risk_detail":"brief risk note","action_plan":"brief strategy","mentor_scenario":"brief scenario","technical_rsi":"{rsi}","technical_resistance":"{sma}"}}'
     )
 
     client = _get_genai_client()
@@ -958,8 +952,8 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
     time.sleep(3)
 
     config = genai_types.GenerateContentConfig(
-        temperature=0.7,
-        max_output_tokens=1024,
+        temperature=0.4,
+        max_output_tokens=2048,
         response_mime_type="application/json",
     )
 
