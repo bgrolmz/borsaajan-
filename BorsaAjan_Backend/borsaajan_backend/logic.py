@@ -937,16 +937,26 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
         f'"technical_resistance": "{sma}"}}'
     )
 
-    import google.generativeai as genai_old
-    genai_old.configure(api_key=_GOOGLE_API_KEY)
-    model = genai_old.GenerativeModel("gemini-1.5-flash")
+    client = _get_genai_client()
+    if not client:
+        return None
+    discovered_model = _discover_model(client, prefer_flash=True)
+    if not discovered_model:
+        return None
 
     time.sleep(3)
 
+    config = genai_types.GenerateContentConfig(
+        temperature=0.7,
+        max_output_tokens=1024,
+        response_mime_type="application/json",
+    )
+
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"},
+        response = client.models.generate_content(
+            model=discovered_model,
+            contents=prompt,
+            config=config,
         )
         raw = response.text
         if not raw:
