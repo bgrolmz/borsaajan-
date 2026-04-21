@@ -11,15 +11,14 @@ builder.Services.AddRazorComponents()
 // Add ChatContextService as singleton
 builder.Services.AddSingleton<ChatContextService>();
 
-// Configure HttpClient for backend API
-// Use BACKEND_API_URL environment variable if set, otherwise default to localhost
-var backendApiUrl = Environment.GetEnvironmentVariable("BACKEND_API_URL") ?? "https://borsaajan-production.up.railway.app";
+var backendUrl = "https://borsaajan-production.up.railway.app";
+var backendApiUrl = Environment.GetEnvironmentVariable("BACKEND_API_URL") ?? backendUrl;
 Console.WriteLine($"[Config] Backend API URL: {backendApiUrl}");
 
 builder.Services.AddHttpClient("BackendApi", client =>
 {
     client.BaseAddress = new Uri(backendApiUrl);
-    client.Timeout = TimeSpan.FromSeconds(300);
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 var app = builder.Build();
