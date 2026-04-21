@@ -2083,8 +2083,8 @@ def webhook_news_signal(
             _log.error(f"[webhook] Gemini analiz döndürmedi: {symbol}")
             return {"status": "skipped", "reason": f"Gemini analiz döndürmedi: {symbol}"}
 
-        raw_impact = (llm.get("impact") or "").lower()
-        impact = "POSITIVE" if "bullish" in raw_impact else ("NEGATIVE" if "bearish" in raw_impact else "NEUTRAL")
+        raw_impact = (llm.get("impact") or "").upper()
+        impact = "POSITIVE" if raw_impact in ("POSITIVE", "BULLISH") else ("NEGATIVE" if raw_impact in ("NEGATIVE", "BEARISH") else "NEUTRAL")
         reason = llm.get("reason", "")
         action_plan = llm.get("action_plan", "")
         mentor_scenario = llm.get("mentor_scenario", "")
@@ -2119,15 +2119,17 @@ def webhook_news_signal(
 
         impact_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(impact, "🟡")
         impact_label_tr = {"POSITIVE": "Pozitif", "NEGATIVE": "Negatif"}.get(impact, "Nötr")
+        decision = llm.get("decision", "TUT") if llm else "TUT"
 
         telegram_body = (
-            f"📋 *{symbol}*\n"
-            f"{haber[:200]}\n\n"
-            f"Etki: {impact_emoji} {impact_label_tr}\n"
-            f"Sebep: {reason[:220]}\n"
-            f"Mentor Görüşü: {mentor_scenario[:180]}\n"
-            f"📊 Fiyat: {price_now if price_now else 'N/A'} | RSI: {technical_rsi} | Direnç: {technical_resistance}\n"
-            f"🎯 Plan: {action_plan[:180]}"
+            f"📋 *{symbol}* — {haber[:120]}\n\n"
+            f"🎯 Karar: {decision}\n"
+            f"📊 Etki: {impact_emoji} {impact_label_tr}\n"
+            f"💡 Yorum: {reason[:300]}\n"
+            f"⚠️ Risk: {risk_level}\n"
+            f"📈 Plan: {action_plan[:200]}\n"
+            f"🔢 RSI: {technical_rsi} | Fiyat: {price_now if price_now else 'N/A'} | Direnç: {technical_resistance}\n"
+            f"🏦 Mentor: {mentor_scenario[:200]}"
         )
 
         from .notification_service import send_and_save_notification

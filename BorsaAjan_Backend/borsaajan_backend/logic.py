@@ -981,15 +981,20 @@ def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, 
     sma = tech.get("sma", "N/A")
 
     prompt = (
-        f"You are a stock market analyst. Analyze the news and technical data below. "
+        f"You are a professional stock trader. Analyze the news and technical data below. "
+        f"Respond in Turkish. Give a clear BUY/SELL/HOLD recommendation. "
+        f"Include specific price action advice. Be direct and opinionated like a professional trader. "
         f"Respond ONLY with valid JSON, no extra text.\n\n"
         f"Symbol: {symbol}\n"
         f"News: {news_text}\n"
         f"Price: {price}\n"
         f"RSI(14): {rsi}\n"
         f"SMA(20): {sma}\n\n"
-        f"Return exactly this JSON structure with your analysis (keep values concise, under 100 chars each):\n"
-        f'{{"symbol":"{symbol}","impact":"Bullish","reason":"brief technical+fundamental reason","risk_level":"Medium","risk_detail":"brief risk note","action_plan":"brief strategy","mentor_scenario":"brief scenario","technical_rsi":"{rsi}","technical_resistance":"{sma}"}}'
+        f"Return exactly this JSON structure (all string values in Turkish, concise under 120 chars each):\n"
+        f'{{"symbol":"{symbol}","impact":"POSITIVE/NEGATIVE/NEUTRAL","decision":"AL/SAT/TUT",'
+        f'"reason":"2-3 cümle Türkçe yorumlu analiz","risk_level":"DÜŞÜK/ORTA/YÜKSEK",'
+        f'"risk_detail":"kısa risk notu","action_plan":"somut fiyat hareketi tavsiyesi (seviye belirt)",'
+        f'"mentor_scenario":"mentor yorumu Türkçe","technical_rsi":"{rsi}","technical_resistance":"{sma}"}}'
     )
 
     client = _get_genai_client()
