@@ -904,6 +904,8 @@ def get_market_data():
 
 
 def get_live_technicals(symbol: str) -> Dict[str, Any]:
+    if not symbol or not symbol.strip():
+        return {"price": "N/A", "rsi": "N/A", "sma": "N/A"}
     try:
         is_crypto_sym = symbol.endswith("-USD") or symbol in ("BTC", "ETH", "SOL", "XRP", "DOGE", "ADA")
         yf_sym = symbol if "-" in symbol else (f"{symbol}-USD" if is_crypto_sym else symbol)
@@ -929,10 +931,49 @@ def get_technical_data_for_news(symbol: str) -> Dict[str, Any]:
     return get_live_technicals(symbol)
 
 
+_NEWS_SYMBOL_KEYWORDS: dict[str, list[str]] = {
+    "NVDA":  ["nvidia", "nvda"],
+    "AAPL":  ["apple", "aapl", "iphone", "ipad", "macbook"],
+    "GOOGL": ["google", "googl", "alphabet", "goog"],
+    "TSLA":  ["tesla", "tsla", "elon musk"],
+    "MSFT":  ["microsoft", "msft", "azure", "windows"],
+    "AMZN":  ["amazon", "amzn", "aws"],
+    "META":  ["meta", "facebook", "instagram", "whatsapp"],
+    "AMD":   ["amd", "advanced micro"],
+    "INTC":  ["intel", "intc"],
+    "QCOM":  ["qualcomm", "qcom"],
+    "MRVL":  ["marvell", "mrvl"],
+    "PLTR":  ["palantir", "pltr"],
+    "NFLX":  ["netflix", "nflx"],
+    "ORCL":  ["oracle", "orcl"],
+    "CRM":   ["salesforce", "crm"],
+    "COIN":  ["coinbase", "coin"],
+}
+
+
+def _clean_symbol(raw: str) -> Optional[str]:
+    if not raw:
+        return None
+    s = raw.strip()
+    if 1 <= len(s) <= 5 and s.isupper() and s.isalpha():
+        return s
+    text_lower = s.lower()
+    for sym, keywords in _NEWS_SYMBOL_KEYWORDS.items():
+        if any(kw in text_lower for kw in keywords):
+            return sym
+    return None
+
+
 def analyze_news_with_gemini(symbol: str, news_text: str) -> Optional[Dict[str, Any]]:
     if not _GOOGLE_API_KEY:
         print("❌ GOOGLE_API_KEY not set")
         return None
+
+    clean = _clean_symbol(symbol)
+    if not clean:
+        print(f"⚠️ [analyze_news_with_gemini] unresolvable symbol: {symbol!r:.60}")
+        return None
+    symbol = clean
 
     tech = get_live_technicals(symbol)
     price = tech.get("price", "N/A")
