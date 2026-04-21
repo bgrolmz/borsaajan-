@@ -903,28 +903,46 @@ def get_market_data():
     except: return {"vix": 0, "piyasa_durumu": "N/A"}
 
 
+def _get_price_alpha_vantage(symbol: str):
+    try:
+        import requests as _requests
+        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=demo"
+        r = _requests.get(url, timeout=5).json()
+        price = r.get("Global Quote", {}).get("05. price")
+        return float(price) if price else None
+    except Exception:
+        return None
+
+
 def get_live_technicals(symbol: str) -> Dict[str, Any]:
     if not symbol or not symbol.strip():
         return {"price": "N/A", "rsi": "N/A", "sma": "N/A"}
+
+    yf_data = None
     try:
         is_crypto_sym = symbol.endswith("-USD") or symbol in ("BTC", "ETH", "SOL", "XRP", "DOGE", "ADA")
         yf_sym = symbol if "-" in symbol else (f"{symbol}-USD" if is_crypto_sym else symbol)
         hist = yf.Ticker(yf_sym).history(period="1mo")
-        if hist.empty:
-            return {"price": "N/A", "rsi": "N/A", "sma": "N/A"}
-        close = hist["Close"]
-        price = round(float(close.iloc[-1]), 4)
-        delta = close.diff()
-        gain = delta.clip(lower=0).rolling(14).mean()
-        loss = (-delta.clip(upper=0)).rolling(14).mean()
-        rs = gain / loss.replace(0, float("nan"))
-        rsi_val = 100 - (100 / (1 + rs))
-        rsi = round(float(rsi_val.iloc[-1]), 2) if not rsi_val.empty else "N/A"
-        sma = round(float(close.rolling(20).mean().iloc[-1]), 4)
-        return {"price": price, "rsi": rsi, "sma": sma}
+        if not hist.empty:
+            close = hist["Close"]
+            price = round(float(close.iloc[-1]), 4)
+            delta = close.diff()
+            gain = delta.clip(lower=0).rolling(14).mean()
+            loss = (-delta.clip(upper=0)).rolling(14).mean()
+            rs = gain / loss.replace(0, float("nan"))
+            rsi_val = 100 - (100 / (1 + rs))
+            rsi = round(float(rsi_val.iloc[-1]), 2) if not rsi_val.empty else "N/A"
+            sma = round(float(close.rolling(20).mean().iloc[-1]), 4)
+            yf_data = {"price": price, "rsi": rsi, "sma": sma}
     except Exception as e:
-        print(f"⚠️ [get_live_technicals] {symbol}: {e}")
-        return {"price": "N/A", "rsi": "N/A", "sma": "N/A"}
+        print(f"⚠️ [get_live_technicals] yfinance failed for {symbol}: {e}")
+
+    if yf_data:
+        return yf_data
+
+    print(f"⚠️ [get_live_technicals] falling back to Alpha Vantage for {symbol}")
+    av_price = _get_price_alpha_vantage(symbol)
+    return {"price": av_price if av_price is not None else "N/A", "rsi": "N/A", "sma": "N/A"}
 
 
 def get_technical_data_for_news(symbol: str) -> Dict[str, Any]:
