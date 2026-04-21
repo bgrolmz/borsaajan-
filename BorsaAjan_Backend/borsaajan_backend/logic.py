@@ -81,15 +81,15 @@ def _discover_model(client, prefer_flash: bool = True) -> Optional[str]:
     
     try:
         # Fast path: try preferred model first without iterating all models
-        preferred = "gemini-1.5-flash"
-        try:
-            model_info = client.models.get(model=preferred)
-            if model_info and "generateContent" in model_info.supported_actions:
-                _CACHED_MODEL_NAME = preferred
-                print(f"✅ Dinamik Model Keşfi: {_CACHED_MODEL_NAME} (preferred)")
-                return _CACHED_MODEL_NAME
-        except Exception:
-            pass  # Preferred model not available, fall through to iteration
+        for preferred in ("gemini-2.0-flash", "gemini-1.5-flash"):
+            try:
+                model_info = client.models.get(model=preferred)
+                if model_info and "generateContent" in model_info.supported_actions:
+                    _CACHED_MODEL_NAME = preferred
+                    print(f"✅ Dinamik Model Keşfi: {_CACHED_MODEL_NAME} (preferred)")
+                    return _CACHED_MODEL_NAME
+            except Exception:
+                pass
 
         flash_model = None
         fallback_model = None
@@ -664,27 +664,47 @@ def safe_gemini_call(
         response_mime_type="application/json",
     )
 
-    response = client.models.generate_content(
-        model=discovered_model,
-        contents=prompt,
-        config=config,
-    )
-    raw = response.text
-    if not raw:
-        raise GeminiCallError("Empty response", reason="empty_response")
-    _register_gemini_call()
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start != -1 and end != -1:
-            parsed = json.loads(raw[start:end + 1])
-        else:
-            raise GeminiCallError("Invalid JSON response", reason="json_parse_error")
-    if isinstance(parsed, list):
-        return parsed[0] if parsed and isinstance(parsed[0], dict) else None
-    return parsed if isinstance(parsed, dict) else None
+    _RETRYABLE_HTTP_CODES = {503, 429}
+    _API_MAX_RETRIES = 2
+
+    last_api_error = None
+    for attempt in range(_API_MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=discovered_model,
+                contents=prompt,
+                config=config,
+            )
+            raw = response.text
+            if not raw:
+                raise GeminiCallError("Empty response", reason="empty_response")
+            _register_gemini_call()
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                start = raw.find("{")
+                end = raw.rfind("}")
+                if start != -1 and end != -1:
+                    parsed = json.loads(raw[start:end + 1])
+                else:
+                    raise GeminiCallError("Invalid JSON response", reason="json_parse_error")
+            if isinstance(parsed, list):
+                return parsed[0] if parsed and isinstance(parsed[0], dict) else None
+            return parsed if isinstance(parsed, dict) else None
+
+        except GeminiCallError:
+            raise
+        except Exception as e:
+            error_code = getattr(e, 'code', None) or getattr(e, 'status_code', None)
+            if error_code in _RETRYABLE_HTTP_CODES and attempt < _API_MAX_RETRIES:
+                wait = 2 ** (attempt + 1)
+                print(f"⚠️ Gemini {error_code} (attempt {attempt+1}/{_API_MAX_RETRIES+1}), retrying in {wait}s...")
+                time.sleep(wait)
+                last_api_error = e
+                continue
+            raise GeminiCallError(f"API error {error_code}: {str(e)[:100]}", reason=f"api_error_{error_code}")
+
+    raise GeminiCallError(f"Failed after {_API_MAX_RETRIES} retries: {last_api_error}", reason="max_retries_exceeded")
 
 
 def _get_safe_fallback(error_reason: str) -> None:
