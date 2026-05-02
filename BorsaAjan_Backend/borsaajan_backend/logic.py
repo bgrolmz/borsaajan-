@@ -664,7 +664,7 @@ def safe_gemini_call(
         response_mime_type="application/json",
     )
 
-    _RETRYABLE_HTTP_CODES = {503, 429}
+    global _CACHED_MODEL_NAME  # declared once at function scope
     _FALLBACK_MODELS = ["gemini-1.5-flash-8b", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"]
     _API_MAX_RETRIES = 2
 
@@ -682,7 +682,6 @@ def safe_gemini_call(
                 raise GeminiCallError("Empty response", reason="empty_response")
             _register_gemini_call()
             if current_model != discovered_model:
-                global _CACHED_MODEL_NAME
                 _CACHED_MODEL_NAME = current_model
                 print(f"✅ Switched to fallback model: {current_model}")
             try:
@@ -703,13 +702,11 @@ def safe_gemini_call(
         except Exception as e:
             error_code = getattr(e, 'code', None) or getattr(e, 'status_code', None)
             if error_code == 429:
-                # Clear cached model and try next fallback
-                global _CACHED_MODEL_NAME
-                _CACHED_MODEL_NAME = None
+                _CACHED_MODEL_NAME = None  # force re-discovery next call
                 next_models = [m for m in _FALLBACK_MODELS if m != current_model]
                 if next_models and attempt < _API_MAX_RETRIES:
                     current_model = next_models[attempt % len(next_models)]
-                    print(f"⚠️ Gemini 429 quota exceeded on {discovered_model}, trying {current_model}...")
+                    print(f"⚠️ Gemini 429 on {discovered_model}, trying {current_model}...")
                     time.sleep(2)
                     last_api_error = e
                     continue
