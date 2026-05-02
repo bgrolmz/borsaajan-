@@ -748,6 +748,36 @@ def test_chart(sembol: str):
             "mesaj": "Chart oluşturulurken exception oluştu."
         }
 
+@app.get("/test/gemini")
+def test_gemini_call():
+    """Debug: test safe_gemini_call directly."""
+    import traceback as _tb
+    from .logic import safe_gemini_call, GeminiCallError, _discover_model, _get_genai_client
+    result = {}
+    try:
+        client = _get_genai_client()
+        model = _discover_model(client, prefer_flash=True)
+        result["model"] = model
+        response = safe_gemini_call(
+            prompt='{"test": true, "message": "Respond only: {\\\"ok\\\": true}"}',
+            response_mode="json",
+            max_output_tokens=64,
+            purpose="test",
+        )
+        result["gemini_ok"] = True
+        result["response"] = response
+    except GeminiCallError as e:
+        result["gemini_ok"] = False
+        result["error_type"] = "GeminiCallError"
+        result["reason"] = e.reason
+        result["message"] = str(e)
+    except Exception as e:
+        result["gemini_ok"] = False
+        result["error_type"] = type(e).__name__
+        result["message"] = str(e)
+        result["traceback"] = _tb.format_exc()[-500:]
+    return result
+
 # ========== PORTFOLIO MANAGEMENT ENDPOINTS ==========
 
 class PortfolioItem(BaseModel):
