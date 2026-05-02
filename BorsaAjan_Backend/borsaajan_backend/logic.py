@@ -906,7 +906,9 @@ def get_market_data():
 def _get_price_alpha_vantage(symbol: str):
     try:
         import requests as _requests
-        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=demo"
+        import os as _os
+        av_key = _os.environ.get("ALPHA_VANTAGE_API_KEY", "demo")
+        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={av_key}"
         r = _requests.get(url, timeout=5).json()
         price = r.get("Global Quote", {}).get("05. price")
         return float(price) if price else None
@@ -1119,7 +1121,7 @@ def get_last_known_price_from_db(symbol: str) -> Optional[float]:
 def get_technical_metrics(symbol):
     """
     Get technical metrics including extended hours (pre/post market) data.
-    
+
     Enhanced with DB fallback: If yfinance fails, uses last known price from database.
     """
     try:
@@ -1128,6 +1130,8 @@ def get_technical_metrics(symbol):
         _logging.getLogger("yfinance").setLevel(_logging.CRITICAL)
         stock = yf.Ticker(normalized_symbol)
         hist = stock.history(period="1mo")
+        if hist.empty:
+            raise ValueError(f"yfinance returned empty history for {normalized_symbol}")
         current = hist['Close'].iloc[-1]
         
         # Get extended hours data (pre/post market) - NEW FEATURE
@@ -1250,6 +1254,21 @@ def get_technical_metrics(symbol):
                 "bb_ust": fallback_price * 1.05   # Estimate +5%
             }
         
+        # ALPHA VANTAGE FALLBACK: try external API
+        av_price = _get_price_alpha_vantage(symbol)
+        if av_price and av_price > 0:
+            print(f"✅ Using Alpha Vantage fallback price: ${av_price} for {symbol}")
+            return {
+                "fiyat": av_price,
+                "current_price": av_price,
+                "pre_market_price": None,
+                "post_market_price": None,
+                "active_price_type": "av_fallback",
+                "rsi": 50,
+                "bb_alt": round(av_price * 0.95, 2),
+                "bb_ust": round(av_price * 1.05, 2),
+            }
+
         # No fallback available - return zeros
         return {"fiyat": 0, "current_price": 0, "pre_market_price": None, "post_market_price": None, "active_price_type": "regular", "rsi": 0, "bb_alt": 0, "bb_ust": 0}
 
@@ -4326,7 +4345,7 @@ def build_template_analysis(
             "stance": stance,
             "entry_plan_tr": [
                 f"Giriş: Mevcut fiyat ${price:.2f} civarı",
-                f"Stop Loss: ${risk_metrics['stop_loss']:.2f} (ATR bazlı: {((price - risk_metrics['stop_loss']) / price * 100):.1f}% altı)",
+                f"Stop Loss: ${risk_metrics['stop_loss']:.2f} (ATR bazlı: {((price - risk_metrics['stop_loss']) / price * 100):.1f}% altı)" if price > 0 else f"Stop Loss: ${risk_metrics['stop_loss']:.2f}",
                 f"Take Profit: ${risk_metrics['take_profit'][0]:.2f} (Hedef 1) veya ${risk_metrics['take_profit'][1]:.2f} (Hedef 2)"
             ],
             "risk_management_tr": {
@@ -4334,7 +4353,7 @@ def build_template_analysis(
                 "take_profit": risk_metrics["take_profit"],
                 "position_sizing_tr": f"Risk seviyesi {risk_metrics['risk_label']} - pozisyon boyutu kullanıcı risk profiline göre ayarlanmalı. ATR: ${atr:.2f}, volatilite: {volatility_analysis['bb_width_pct']:.2f}%"
             },
-            "time_horizon": "SHORT" if atr > 0 and (atr / price) > 0.03 else "MEDIUM"
+            "time_horizon": "SHORT" if atr > 0 and price > 0 and (atr / price) > 0.03 else "MEDIUM"
         },
         "risk_score": {
             "value": risk_metrics["risk_score"],
