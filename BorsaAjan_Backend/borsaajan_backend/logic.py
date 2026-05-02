@@ -666,7 +666,7 @@ def safe_gemini_call(
 
     global _CACHED_MODEL_NAME  # declared once at function scope
     _FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
-    _API_MAX_RETRIES = 2
+    _API_MAX_RETRIES = 3
 
     last_api_error = None
     current_model = discovered_model
@@ -701,7 +701,19 @@ def safe_gemini_call(
             raise
         except Exception as e:
             error_code = getattr(e, 'code', None) or getattr(e, 'status_code', None)
-            if error_code == 429:
+            error_str = str(e)
+            is_429 = (error_code == 429) or ("429" in error_str) or ("RESOURCE_EXHAUSTED" in error_str) or ("quota" in error_str.lower()) or ("rate" in error_str.lower() and "limit" in error_str.lower())
+            is_503 = (error_code == 503) or ("503" in error_str) or ("UNAVAILABLE" in error_str)
+            is_404 = (error_code == 404) or ("404" in error_str) or ("NOT_FOUND" in error_str)
+            if is_404:
+                _CACHED_MODEL_NAME = None
+                next_models = [m for m in _FALLBACK_MODELS if m != current_model]
+                if next_models and attempt < _API_MAX_RETRIES:
+                    current_model = next_models[attempt % len(next_models)]
+                    print(f"⚠️ Gemini 404 on {current_model} (model not found), trying {current_model}...")
+                    last_api_error = e
+                    continue
+            elif is_429:
                 _CACHED_MODEL_NAME = None  # force re-discovery next call
                 next_models = [m for m in _FALLBACK_MODELS if m != current_model]
                 if next_models and attempt < _API_MAX_RETRIES:
@@ -710,13 +722,14 @@ def safe_gemini_call(
                     time.sleep(2)
                     last_api_error = e
                     continue
-            elif error_code == 503 and attempt < _API_MAX_RETRIES:
+            elif is_503 and attempt < _API_MAX_RETRIES:
                 wait = 2 ** (attempt + 1)
                 print(f"⚠️ Gemini 503 (attempt {attempt+1}/{_API_MAX_RETRIES+1}), retrying in {wait}s...")
                 time.sleep(wait)
                 last_api_error = e
                 continue
-            raise GeminiCallError(f"API error {error_code}: {str(e)[:100]}", reason=f"api_error_{error_code}")
+            print(f"❌ Gemini exception (code={error_code}): {error_str[:200]}")
+            raise GeminiCallError(f"API error: {error_str[:100]}", reason=f"api_error_{error_code}")
 
     raise GeminiCallError(f"Failed after {_API_MAX_RETRIES} retries: {last_api_error}", reason="max_retries_exceeded")
 
