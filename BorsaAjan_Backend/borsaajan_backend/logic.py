@@ -903,6 +903,20 @@ def get_market_data():
     except: return {"vix": 0, "piyasa_durumu": "N/A"}
 
 
+def _get_price_yahoo_direct(symbol: str):
+    """Bypass yfinance library; call Yahoo Finance v8 chart API directly."""
+    try:
+        import requests as _req
+        headers = {"User-Agent": "Mozilla/5.0"}
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+        r = _req.get(url, headers=headers, timeout=8).json()
+        meta = r["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice") or meta.get("previousClose")
+        return float(price) if price else None
+    except Exception:
+        return None
+
+
 def _get_price_alpha_vantage(symbol: str):
     try:
         import requests as _requests
@@ -1239,6 +1253,21 @@ def get_technical_metrics(symbol):
     except Exception as e:
         print(f"⚠️ Technical metrics error for {symbol}: {e}")
         
+        # YAHOO DIRECT FALLBACK (priority 1 - same source, no lib dependency)
+        yh_price = _get_price_yahoo_direct(symbol)
+        if yh_price and yh_price > 0:
+            print(f"✅ Using Yahoo Direct fallback price: ${yh_price} for {symbol}")
+            return {
+                "fiyat": yh_price,
+                "current_price": yh_price,
+                "pre_market_price": None,
+                "post_market_price": None,
+                "active_price_type": "yahoo_direct",
+                "rsi": 50,
+                "bb_alt": round(yh_price * 0.95, 2),
+                "bb_ust": round(yh_price * 1.05, 2),
+            }
+
         # DB FALLBACK: Try to get last known price from database
         fallback_price = get_last_known_price_from_db(symbol)
         if fallback_price and fallback_price > 0:
@@ -1249,11 +1278,11 @@ def get_technical_metrics(symbol):
                 "pre_market_price": None,
                 "post_market_price": None,
                 "active_price_type": "db_fallback",
-                "rsi": 50,  # Neutral RSI when no data
-                "bb_alt": fallback_price * 0.95,  # Estimate -5%
-                "bb_ust": fallback_price * 1.05   # Estimate +5%
+                "rsi": 50,
+                "bb_alt": round(fallback_price * 0.95, 2),
+                "bb_ust": round(fallback_price * 1.05, 2),
             }
-        
+
         # ALPHA VANTAGE FALLBACK: try external API
         av_price = _get_price_alpha_vantage(symbol)
         if av_price and av_price > 0:
