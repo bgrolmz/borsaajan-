@@ -81,7 +81,7 @@ def _discover_model(client, prefer_flash: bool = True) -> Optional[str]:
     
     try:
         # Fast path: try preferred model first without iterating all models
-        for preferred in ("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-lite"):
+        for preferred in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite"):
             try:
                 model_info = client.models.get(model=preferred)
                 if model_info and "generateContent" in model_info.supported_actions:
@@ -665,7 +665,7 @@ def safe_gemini_call(
     )
 
     global _CACHED_MODEL_NAME  # declared once at function scope
-    _FALLBACK_MODELS = ["gemini-1.5-flash-8b", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"]
+    _FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
     _API_MAX_RETRIES = 2
 
     last_api_error = None
@@ -4958,64 +4958,63 @@ Respond with ONLY the following JSON. Fill every field. Complete all strings. No
 Output this JSON and nothing else:
 
 {{
-  "meta": {{
-    "symbol": "{symbol}",
-    "last_price": {price},
-    "change_percent": 0.0
+  "headline_tr": "Tek cümlelik Türkçe yönetici özeti başlığı",
+  "verdict": "AL veya TUT veya SAT",
+  "confidence": 75,
+  "strategy_name": "Stratejinin ismi (örn: Momentum Sörfü, Kademeli Toplama)",
+  "main_thesis": "Ana yatırım tezi: mevcut teknik ve temel verilere dayanarak neden bu karar verildi, en az 3 cümle Türkçe",
+  "thesis_bullets": [
+    "Giriş planı: ${price:.2f} yakınında pozisyon, kademeli alım önerilir",
+    "Teknik görünüm: RSI/MACD/SMA sinyallerinin özeti ve anlamı",
+    "Katalist: Fiyatı tetikleyecek olay veya seviye"
+  ],
+  "risk_bullets": [
+    "Stop-loss seviyesi ve yüzde kaybı",
+    "En kötü senaryo: destek kırılırsa beklenen hareket",
+    "Makro risk: sektör veya piyasa geneli risk faktörü"
+  ],
+  "levels": {{
+    "entry_zone": "${price:.2f} civarı",
+    "stop_loss": "0.00",
+    "take_profit_1": "0.00",
+    "take_profit_2": "0.00"
   }},
-  "verdict": {{
-    "decision": "AL veya TUT veya SAT",
-    "confidence": 0,
-    "horizon": "kısa vadeli veya orta vadeli veya uzun vadeli",
-    "strategy_name": "Stratejinin adı"
-  }},
-  "sections": {{
-    "yonetici_ozeti": {{
-      "headline": "Tek cümlelik Türkçe başlık",
-      "content": "Yönetici özeti: en az 3 tam cümle Türkçe analiz"
+  "scenarios": [
+    {{
+      "type": "bull",
+      "trigger": "Boğa senaryosunu tetikleyecek olay veya seviye",
+      "expected_move": "Hedef fiyat ve yüzde artış",
+      "timeframe": "1-2 hafta"
     }},
-    "teknik_analiz": {{
-      "indicators": {{
-        "rsi": 0,
-        "bollinger": "Bollinger band konumu ve yorumu",
-        "fibonacci": "Fibonacci destek/direnç seviyeleri ve yorumu"
-      }},
-      "commentary": "Teknik analiz yorumu: en az 2 tam cümle Türkçe"
+    {{
+      "type": "base",
+      "trigger": "Baz senaryo: mevcut trendin devamı",
+      "expected_move": "Beklenen fiyat aralığı",
+      "timeframe": "2-4 hafta"
     }},
-    "stratejik_oyun_plani": {{
-      "main_thesis": "Ana yatırım tezi: en az 3 tam cümle Türkçe",
-      "steps": [
-        "Adım 1: Giriş planı ve fiyat seviyesi",
-        "Adım 2: Pozisyon büyüklüğü ve kademeli alım stratejisi",
-        "Adım 3: Stop-loss ve kar realizasyonu kriterleri"
-      ]
-    }},
-    "risk_notu": {{
-      "level": "DÜŞÜK veya ORTA veya YÜKSEK",
-      "warnings": [
-        "Risk uyarısı 1: somut ve sayısal",
-        "Risk uyarısı 2: somut ve sayısal"
-      ]
+    {{
+      "type": "bear",
+      "trigger": "Ayı senaryosu: bozulma sinyali",
+      "expected_move": "Destek seviyeleri ve olası düşüş",
+      "timeframe": "1-3 hafta"
     }}
-  }},
-  "targets": {{
-    "stop_loss": 0.0,
-    "take_profit": 0.0,
-    "current_cost": {price}
-  }}
+  ],
+  "news_summary": "Son haberlerin fiyata etkisi ve önemli katalitler - Türkçe özet",
+  "what_to_watch": [
+    "Takip edilecek teknik seviye veya olay 1",
+    "Takip edilecek teknik seviye veya olay 2",
+    "Takip edilecek teknik seviye veya olay 3"
+  ]
 }}
 
 CRITICAL RULES:
-1. Output ONLY valid JSON. No markdown. No explanations. No text before or after the JSON object.
-2. The response MUST start with '{{' and end with '}}'.
-3. All string values MUST be in Turkish.
-4. Do NOT use newlines inside string values. Write full sentences without line breaks.
-5. Complete every string fully. Never cut a sentence short. Never leave a string unterminated.
-6. verdict.decision MUST be exactly one of: "AL", "TUT", or "SAT".
-7. verdict.confidence MUST be an integer between 0 and 100.
-8. targets.stop_loss and targets.take_profit MUST be numeric float values computed from technical support/resistance levels.
-9. sections.risk_notu.level MUST be exactly one of: "DÜŞÜK", "ORTA", or "YÜKSEK".
-10. sections.stratejik_oyun_plani.steps MUST be a non-empty JSON array of strings.
+1. Output ONLY valid JSON. No markdown. No text before or after the braces.
+2. verdict MUST be exactly: "AL", "TUT", or "SAT".
+3. confidence MUST be an integer 0-100.
+4. levels.stop_loss and levels.take_profit_1/2 MUST be numeric strings like "185.50".
+5. All string values MUST be in Turkish. Minimum 3 sentences in main_thesis.
+6. Do NOT use newlines inside JSON string values.
+7. thesis_bullets and risk_bullets must have 3-5 items each, concrete and specific.
 """
     
     # Get chart data for fallback (if needed)
@@ -5074,47 +5073,64 @@ CRITICAL RULES:
         # Logging: gemini_call_count, input_tokens_est, output_tokens_est, reason
         print(f"[llm] gemini_call_count=1 input_tokens_est={input_tokens_est} output_tokens_est={output_tokens_est} reason=success schema=NEW_ANALYSIS_SCHEMA")
         
-        # DEFINITIVE FIX: MERGE & SURVIVE STRATEGY
-        # NEVER discard AI response - always merge with defaults to ensure usable output
-        default_template = {
-            "decision": "HOLD",
-            "headline_tr": "Piyasa Verileri Analiz Ediliyor",
-            "verdict": "TUT",
-            "confidence": 50,
-            "main_thesis": "Veri akışı sağlandı, detaylı analiz yükleniyor.",
-            "thesis_bullets": ["Temel veriler güncel", "Teknik analiz bekleniyor"],
-            "risk_bullets": ["Volatilite mevcut", "Piyasa koşullarını takip edin"],
-            "action_plan_steps": ["Mevcut pozisyonu koru"],
-            "strategy_name": "Bekle ve Gör",
-            "valuation_note": "Hesaplamalar sürüyor...",
-            "levels": {
-                "entry_zone": "N/A",
-                "stop_loss": "N/A", 
-                "take_profit_1": "N/A",
-                "take_profit_2": "N/A"
-            },
-            "scenarios": [
-                {"type": "bull", "label": "Boğa Senaryosu", "probability": 33, "description": "Olumlu senaryo"},
-                {"type": "base", "label": "Baz Senaryo", "probability": 34, "description": "Nötr senaryo"},
-                {"type": "bear", "label": "Ayı Senaryosu", "probability": 33, "description": "Dikkatli senaryo"}
-            ],
-            "news_summary": "Haber verisi bekleniyor",
-            "what_to_watch": ["Piyasa koşullarını takip edin"]
-        }
-        
-        # MERGE: Fill ALL missing keys from default_template (NO VALIDATION FAILURE)
+        # SCHEMA NORMALIZATION: prompt now returns NEW_ANALYSIS_SCHEMA directly.
+        # If Gemini returned old format (with sections/targets), remap to flat schema.
         if isinstance(result, dict):
-            filled_fields = []
-            for key, default_value in default_template.items():
-                if key not in result or result[key] is None or result[key] == "":
-                    result[key] = default_value
-                    filled_fields.append(key)
-            
-            if filled_fields:
-                print(f"✅ [MERGE & SURVIVE] Filled {len(filled_fields)} missing fields: {filled_fields[:5]}{'...' if len(filled_fields) > 5 else ''}")
+            sections = result.get("sections", {})
+            verdict_raw = result.get("verdict", "TUT")
+            targets = result.get("targets", {})
+
+            # Remap old nested format to flat NEW_ANALYSIS_SCHEMA
+            if sections and isinstance(sections, dict):
+                yonetici = sections.get("yonetici_ozeti", {}) or {}
+                stratejik = sections.get("stratejik_oyun_plani", {}) or {}
+                risk_nota = sections.get("risk_notu", {}) or {}
+                verdict_obj = verdict_raw if isinstance(verdict_raw, dict) else {}
+                verdict_str = verdict_obj.get("decision", "TUT") if isinstance(verdict_obj, dict) else str(verdict_raw)
+                confidence_val = verdict_obj.get("confidence", 50) if isinstance(verdict_obj, dict) else result.get("confidence", 50)
+                steps = stratejik.get("steps", []) if isinstance(stratejik, dict) else []
+                main_t = stratejik.get("main_thesis", "") if isinstance(stratejik, dict) else ""
+                thesis = ([main_t] if main_t else []) + (steps if isinstance(steps, list) else [])
+                warnings = risk_nota.get("warnings", []) if isinstance(risk_nota, dict) else []
+                sl = targets.get("stop_loss", 0) if isinstance(targets, dict) else 0
+                tp = targets.get("take_profit", 0) if isinstance(targets, dict) else 0
+                result["headline_tr"] = yonetici.get("headline", "") if isinstance(yonetici, dict) else result.get("headline_tr", "")
+                result["verdict"] = verdict_str
+                result["confidence"] = confidence_val
+                if thesis: result["thesis_bullets"] = thesis
+                if warnings: result["risk_bullets"] = warnings
+                result["levels"] = {
+                    "entry_zone": f"${price:.2f} civarı",
+                    "stop_loss": f"{sl:.2f}" if sl else "N/A",
+                    "take_profit_1": f"{tp:.2f}" if tp else "N/A",
+                    "take_profit_2": f"{tp * 1.05:.2f}" if tp else "N/A",
+                }
+
+            # Normalize verdict to string
+            if isinstance(result.get("verdict"), dict):
+                result["verdict"] = result["verdict"].get("decision", "TUT")
+
+            # Fill missing keys with safe defaults
+            defaults = {
+                "headline_tr": f"{symbol} Teknik Analiz",
+                "verdict": "TUT", "confidence": 50, "strategy_name": "Bekle ve Gör",
+                "main_thesis": "Teknik göstergeler nötr seviyede.",
+                "thesis_bullets": ["Teknik göstergeler nötr", "Piyasa izleniyor"],
+                "risk_bullets": ["Volatilite riski mevcut", "Stop-loss kullanın"],
+                "levels": {"entry_zone": f"${price:.2f}", "stop_loss": "N/A", "take_profit_1": "N/A", "take_profit_2": "N/A"},
+                "scenarios": [
+                    {"type": "bull", "trigger": "Direnç kırılması", "expected_move": "+5%", "timeframe": "1-2 hafta"},
+                    {"type": "base", "trigger": "Mevcut trend devam", "expected_move": "Yatay", "timeframe": "2-4 hafta"},
+                    {"type": "bear", "trigger": "Destek kırılması", "expected_move": "-5%", "timeframe": "1-3 hafta"},
+                ],
+                "news_summary": "Haber analizi mevcut değil.",
+                "what_to_watch": ["RSI 70 üstü aşırı alım", "Destek/direnç seviyeleri"],
+            }
+            for k, v in defaults.items():
+                if k not in result or not result[k]:
+                    result[k] = v
         else:
-            # Result is not a dict - use entire default template
-            print(f"⚠️ [MERGE & SURVIVE] Result was not a dict, using default template")
+            print(f"⚠️ [SCHEMA] Result was not a dict")
             result = default_template.copy()
         
         # Auto-fix levels object
@@ -6086,87 +6102,60 @@ def _validate_and_fill_analysis(result: dict, symbol: str, mode: str, price: flo
 
 
 def _transform_master_to_legacy_format(master_analysis: dict, news_sentiment_score: int = 50) -> dict:
-    """
-    Transform new master analysis format to legacy format for backward compatibility.
-    
-    CRITICAL FIX: Use ensure_dict on all extractions to prevent AttributeError when
-    Gemini returns lists instead of dicts.
-    """
-    # CRITICAL FIX: Apply ensure_dict to all major extractions
-    strategy = ensure_dict(master_analysis.get("strategy", {}))
-    summary = ensure_dict(master_analysis.get("summary", {}))
-    scenarios = ensure_dict(master_analysis.get("scenarios", {}))
-    sentiment = ensure_dict(master_analysis.get("sentiment_and_catalysts", {}))
-    
-    # Map stance to legacy karar format
-    stance = strategy.get("stance", "HOLD").upper()
-    if stance == "BUY" or stance == "LONG":
-        karar = "AL"
-    elif stance == "SELL" or stance == "SHORT":
-        karar = "SAT"
+    """Transform NEW_ANALYSIS_SCHEMA format to legacy analiz format for frontend."""
+    ma = master_analysis if isinstance(master_analysis, dict) else {}
+
+    # verdict → karar
+    verdict_raw = ma.get("verdict", "TUT")
+    if isinstance(verdict_raw, dict):
+        verdict_str = verdict_raw.get("decision", "TUT")
     else:
-        karar = "TUT"
-    
-    # Extract confidence_score (new schema)
-    confidence_score_obj = ensure_dict(master_analysis.get("confidence_score", {}))
-    if isinstance(confidence_score_obj, dict):
-        confidence_score = confidence_score_obj.get("value", 50)
-    else:
-        confidence_score = confidence_score_obj if confidence_score_obj else 50
-    
-    # Extract benzer_gecmis_senaryo from scenarios
-    bear_case = ensure_dict(scenarios.get("bear_case_tr", {}))
-    if isinstance(bear_case, dict):
-        benzer_gecmis = bear_case.get("thesis", bear_case.get("description", "Analiz edilemedi"))
-    else:
-        benzer_gecmis = "Analiz edilemedi"
-    
-    # Extract anlik_olay_kontrolu from sentiment
-    anlik_olay = sentiment.get("news_impact_tr", "Kontrol edilemedi")
-    
-    # Extract stop_loss from risk_management_tr
-    risk_mgmt = ensure_dict(strategy.get("risk_management_tr", {}))
-    if isinstance(risk_mgmt, dict):
-        stop_loss = risk_mgmt.get("stop_loss", "N/A")
-        if isinstance(stop_loss, (int, float)):
-            stop_loss = f"${stop_loss:.2f}"
-    else:
-        stop_loss = "N/A"
-    
-    # Extract risks
-    fundamental = ensure_dict(master_analysis.get("fundamental_analysis", {}))
-    risks_tr = fundamental.get("risks_tr", [])
-    risk_uyarisi = ", ".join(risks_tr[:2]) if risks_tr else "Risk analizi yapılamadı"
-    
-    # Extract summary fields
-    headline_tr = summary.get("headline_tr", summary.get("headline", ""))
-    one_liner_tr = summary.get("one_liner_tr", "")
-    
-    # Extract strategy fields
-    entry_plan = strategy.get("entry_plan_tr", [])
-    position_sizing = ""
-    if isinstance(risk_mgmt, dict):
-        position_sizing = risk_mgmt.get("position_sizing_tr", "")
-    
-    # CRITICAL FIX: Apply ensure_dict to technical_analysis extraction
-    technical_analysis = ensure_dict(master_analysis.get("technical_analysis", {}))
-    
-    legacy_analysis = {
+        verdict_str = str(verdict_raw).upper()
+    if verdict_str in ("AL", "BUY"): karar = "AL"
+    elif verdict_str in ("SAT", "SELL"): karar = "SAT"
+    else: karar = "TUT"
+
+    confidence = ma.get("confidence", 50)
+    try: confidence = int(confidence)
+    except: confidence = 50
+
+    headline_tr = ma.get("headline_tr", "")
+    main_thesis = ma.get("main_thesis", "")
+    thesis_bullets = ma.get("thesis_bullets", [])
+    risk_bullets = ma.get("risk_bullets", [])
+    news_summary = ma.get("news_summary", "")
+    what_to_watch = ma.get("what_to_watch", [])
+    strategy_name = ma.get("strategy_name", "")
+    levels = ma.get("levels", {}) if isinstance(ma.get("levels"), dict) else {}
+
+    # Build rich strings for legacy fields
+    ana_neden = headline_tr or main_thesis or "Analiz tamamlandı"
+    teknik_str = ". ".join(thesis_bullets[:3]) if thesis_bullets else "Teknik analiz yapılamadı"
+    stratejik_str = main_thesis or ". ".join(thesis_bullets) or "Stratejik plan yapılamadı"
+    risk_str = " | ".join(risk_bullets[:2]) if risk_bullets else "Risk analizi yapılamadı"
+    stop_loss = levels.get("stop_loss", "N/A")
+
+    # Bear scenario from scenarios list
+    scenarios = ma.get("scenarios", [])
+    bear = next((s for s in scenarios if isinstance(s, dict) and s.get("type") == "bear"), {})
+    benzer_gecmis = bear.get("trigger", "") + " " + bear.get("expected_move", "") if bear else news_summary or "Analiz edilemedi"
+
+    anlik_olay = news_summary or ". ".join(what_to_watch[:2]) or "Kontrol edilemedi"
+
+    return {
         "karar": karar,
-        "guven_skoru": str(int(confidence_score)),
-        "ana_neden": headline_tr or one_liner_tr or "Analiz tamamlandı",
+        "guven_skoru": str(confidence),
+        "ana_neden": ana_neden,
         "ozdenetim_yorum": anlik_olay,
-        "teknik_derinlik": ", ".join(technical_analysis.get("notes_tr", [])[:3]) or "Teknik analiz yapılamadı",
-        "stratejik_plan": position_sizing or ". ".join(entry_plan[:3]) or "Stratejik plan yapılamadı",
-        "ozel_strateji_basligi": strategy.get("stance", "HOLD"),
-        "ozel_strateji_detayi": position_sizing or ". ".join(entry_plan[:3]) or "Strateji detayı yapılamadı",
+        "teknik_derinlik": teknik_str,
+        "stratejik_plan": stratejik_str,
+        "ozel_strateji_basligi": strategy_name or karar,
+        "ozel_strateji_detayi": ". ".join(thesis_bullets) or stratejik_str,
         "stop_loss": stop_loss,
-        "risk_uyarisi": risk_uyarisi,
+        "risk_uyarisi": risk_str,
         "benzer_gecmis_senaryo": benzer_gecmis,
-        "anlik_olay_kontrolu": anlik_olay
+        "anlik_olay_kontrolu": anlik_olay,
     }
-    
-    return legacy_analysis
 
 
 def _iso_utc_now() -> str:
