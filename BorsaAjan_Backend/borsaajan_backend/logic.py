@@ -81,7 +81,7 @@ def _discover_model(client, prefer_flash: bool = True) -> Optional[str]:
     
     try:
         # Fast path: try preferred model first without iterating all models
-        for preferred in ("gemini-2.0-flash", "gemini-1.5-flash"):
+        for preferred in ("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-lite"):
             try:
                 model_info = client.models.get(model=preferred)
                 if model_info and "generateContent" in model_info.supported_actions:
@@ -665,13 +665,15 @@ def safe_gemini_call(
     )
 
     _RETRYABLE_HTTP_CODES = {503, 429}
+    _FALLBACK_MODELS = ["gemini-1.5-flash-8b", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"]
     _API_MAX_RETRIES = 2
 
     last_api_error = None
+    current_model = discovered_model
     for attempt in range(_API_MAX_RETRIES + 1):
         try:
             response = client.models.generate_content(
-                model=discovered_model,
+                model=current_model,
                 contents=prompt,
                 config=config,
             )
@@ -679,6 +681,10 @@ def safe_gemini_call(
             if not raw:
                 raise GeminiCallError("Empty response", reason="empty_response")
             _register_gemini_call()
+            if current_model != discovered_model:
+                global _CACHED_MODEL_NAME
+                _CACHED_MODEL_NAME = current_model
+                print(f"✅ Switched to fallback model: {current_model}")
             try:
                 parsed = json.loads(raw)
             except json.JSONDecodeError:
@@ -696,9 +702,20 @@ def safe_gemini_call(
             raise
         except Exception as e:
             error_code = getattr(e, 'code', None) or getattr(e, 'status_code', None)
-            if error_code in _RETRYABLE_HTTP_CODES and attempt < _API_MAX_RETRIES:
+            if error_code == 429:
+                # Clear cached model and try next fallback
+                global _CACHED_MODEL_NAME
+                _CACHED_MODEL_NAME = None
+                next_models = [m for m in _FALLBACK_MODELS if m != current_model]
+                if next_models and attempt < _API_MAX_RETRIES:
+                    current_model = next_models[attempt % len(next_models)]
+                    print(f"⚠️ Gemini 429 quota exceeded on {discovered_model}, trying {current_model}...")
+                    time.sleep(2)
+                    last_api_error = e
+                    continue
+            elif error_code == 503 and attempt < _API_MAX_RETRIES:
                 wait = 2 ** (attempt + 1)
-                print(f"⚠️ Gemini {error_code} (attempt {attempt+1}/{_API_MAX_RETRIES+1}), retrying in {wait}s...")
+                print(f"⚠️ Gemini 503 (attempt {attempt+1}/{_API_MAX_RETRIES+1}), retrying in {wait}s...")
                 time.sleep(wait)
                 last_api_error = e
                 continue
