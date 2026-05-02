@@ -3104,6 +3104,47 @@ def _split_missing_dates_into_segments(missing_dates: List[date]) -> List[tuple]
     return segments
 
 
+def _fetch_ohlcv_yahoo_direct(symbol: str, period: str = "1y") -> List[Dict[str, Any]]:
+    """Fetch OHLCV bars from Yahoo Finance v8 chart API directly (no yfinance lib)."""
+    try:
+        import requests as _req
+        from datetime import datetime as _datetime
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range={period}"
+        r = _req.get(url, headers=headers, timeout=15).json()
+        result = r["chart"]["result"][0]
+        timestamps = result.get("timestamps") or result.get("timestamp", [])
+        q = result["indicators"]["quote"][0]
+        opens = q.get("open", [])
+        highs = q.get("high", [])
+        lows = q.get("low", [])
+        closes = q.get("close", [])
+        volumes = q.get("volume", [])
+        today = _datetime.utcnow().date()
+        bars = []
+        for i, ts in enumerate(timestamps):
+            if ts is None:
+                continue
+            bar_date = _datetime.utcfromtimestamp(ts).date()
+            if bar_date > today:
+                continue
+            c = closes[i] if i < len(closes) and closes[i] is not None else None
+            if c is None:
+                continue
+            bars.append({
+                "date": bar_date.strftime("%Y-%m-%d"),
+                "open": round(float(opens[i] or c), 2),
+                "high": round(float(highs[i] or c), 2),
+                "low": round(float(lows[i] or c), 2),
+                "close": round(float(c), 2),
+                "volume": int(volumes[i] or 0) if i < len(volumes) else 0,
+            })
+        return bars
+    except Exception as e:
+        print(f"⚠️ Yahoo Direct OHLCV failed for {symbol}: {e}")
+        return []
+
+
 def _fetch_remote_bars(symbol: str, mode: str, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[Dict[str, Any]]:
     """
     Fetch market bars from remote (yfinance) for a given date range.
@@ -3192,8 +3233,16 @@ def _fetch_remote_bars(symbol: str, mode: str, start_date: Optional[date] = None
         return remote_bars
         
     except Exception as e:
-        print(f"⚠️ Remote fetch error for {normalized_symbol}: {e}")
-        return []
+        print(f"⚠️ Remote fetch (yfinance) error for {normalized_symbol}: {e}")
+
+    # YAHOO DIRECT FALLBACK for OHLCV
+    if not remote_bars:
+        print(f"[chart] yfinance failed, trying Yahoo Direct for {normalized_symbol}")
+        remote_bars = _fetch_ohlcv_yahoo_direct(normalized_symbol, period="1y")
+        if remote_bars:
+            print(f"✅ Yahoo Direct returned {len(remote_bars)} bars for {normalized_symbol}")
+
+    return remote_bars
 
 
 def get_chart_data(symbol: str, mode: str = "STOCK") -> List[Dict[str, Any]]:
