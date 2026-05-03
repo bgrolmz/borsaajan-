@@ -563,10 +563,34 @@ def init_db() -> None:
                 logger.info(f"🧹 Watchlist cleanup: Removed {cleaned_count} invalid symbols")
         except Exception as cleanup_err:
             logger.warning(f"⚠️ Watchlist cleanup failed (non-fatal): {cleanup_err}")
-        
+
+        # Symbol-level outcome tracking (self-improving AI)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS symbol_outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                analysis_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                verdict TEXT NOT NULL,
+                confidence INTEGER,
+                price_at_analysis REAL NOT NULL,
+                horizon_days INTEGER NOT NULL,
+                price_at_check REAL,
+                price_change_pct REAL,
+                verdict_correct INTEGER,
+                computed_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (analysis_id) REFERENCES analysis_history(id) ON DELETE CASCADE,
+                UNIQUE(analysis_id, horizon_days)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_symbol_outcomes_symbol
+            ON symbol_outcomes(symbol)
+        """)
+
         conn.commit()
         conn.close()
-        
+
         db_path = get_db_path()
         logger.info(f"✅ Database initialized: {db_path}")
         
@@ -1088,6 +1112,106 @@ def get_symbol_analysis_history(symbol: str, limit: int = 50) -> List[Dict[str, 
     except Exception as e:
         logger.error(f"❌ Failed to get symbol analysis history: {e}", exc_info=True)
         return []
+
+
+def get_analyses_pending_outcome(horizon_days: int, min_age_hours: int = 24) -> List[Dict[str, Any]]:
+    """Return analyses old enough to have an outcome but not yet tracked."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT ah.id, ah.symbol, ah.mode, ah.verdict, ah.confidence,
+                   ah.price_at_analysis, ah.created_at
+            FROM analysis_history ah
+            WHERE ah.price_at_analysis > 0
+              AND datetime(ah.created_at) <= datetime('now', ? || ' hours')
+              AND NOT EXISTS (
+                  SELECT 1 FROM symbol_outcomes so
+                  WHERE so.analysis_id = ah.id AND so.horizon_days = ?
+              )
+            ORDER BY ah.created_at ASC
+            LIMIT 100
+        """, (f"-{horizon_days * 24}", horizon_days))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"❌ get_analyses_pending_outcome: {e}")
+        return []
+
+
+def save_symbol_outcome(
+    analysis_id: int, symbol: str, verdict: str, confidence: int,
+    price_at_analysis: float, horizon_days: int,
+    price_at_check: float, price_change_pct: float, verdict_correct: int
+) -> None:
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR IGNORE INTO symbol_outcomes
+            (analysis_id, symbol, verdict, confidence, price_at_analysis,
+             horizon_days, price_at_check, price_change_pct, verdict_correct, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (analysis_id, symbol.upper(), verdict, confidence,
+              price_at_analysis, horizon_days, price_at_check,
+              price_change_pct, verdict_correct))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"❌ save_symbol_outcome: {e}")
+
+
+def get_symbol_learning_context(symbol: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Return past analyses with outcome data for self-improvement context."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT ah.summary, ah.price_at_analysis, ah.created_at,
+                   so.verdict, so.confidence, so.horizon_days,
+                   so.price_change_pct, so.verdict_correct
+            FROM analysis_history ah
+            JOIN symbol_outcomes so ON so.analysis_id = ah.id
+            WHERE ah.symbol = ?
+              AND so.price_at_check IS NOT NULL
+            ORDER BY ah.created_at DESC
+            LIMIT ?
+        """, (symbol.upper(), limit))
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"❌ get_symbol_learning_context: {e}")
+        return []
+
+
+def get_symbol_accuracy_stats(symbol: str) -> Dict[str, Any]:
+    """Return overall accuracy stats for a symbol."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN so.verdict_correct = 1 THEN 1 ELSE 0 END) as correct,
+                AVG(so.price_change_pct) as avg_change_pct,
+                AVG(CASE WHEN so.verdict IN ('AL','BUY') THEN so.price_change_pct END) as avg_buy_change,
+                AVG(CASE WHEN so.verdict IN ('SAT','SELL') THEN so.price_change_pct END) as avg_sell_change
+            FROM analysis_history ah
+            JOIN symbol_outcomes so ON so.analysis_id = ah.id
+            WHERE ah.symbol = ? AND so.price_at_check IS NOT NULL
+        """, (symbol.upper(),))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            d = dict(row)
+            d["accuracy_pct"] = round((d["correct"] / d["total"]) * 100, 1) if d["total"] else None
+            return d
+        return {}
+    except Exception as e:
+        logger.error(f"❌ get_symbol_accuracy_stats: {e}")
+        return {}
 
 
 def get_all_history() -> List[Dict[str, Any]]:

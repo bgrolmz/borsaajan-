@@ -505,6 +505,24 @@ def initialize_scheduler():
         )
         print("✅ News outcome checker scheduled every 10 minutes")
 
+        # Self-improving AI: compute symbol-level prediction outcomes every 6 hours
+        def run_symbol_outcome_checker():
+            try:
+                from .logic import compute_pending_outcomes
+                compute_pending_outcomes()
+            except Exception as e:
+                import traceback
+                print(f"[OUTCOMES] Error: {e}")
+                traceback.print_exc()
+
+        scheduler.add_job(
+            run_symbol_outcome_checker,
+            trigger=IntervalTrigger(hours=6),
+            id='symbol_outcome_checker',
+            replace_existing=True
+        )
+        print("✅ Symbol outcome checker scheduled every 6 hours")
+
         _scheduler_initialized = True
         print("✅ All scheduled jobs registered successfully")
     

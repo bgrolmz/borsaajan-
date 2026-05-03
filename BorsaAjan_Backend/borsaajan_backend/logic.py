@@ -18,12 +18,12 @@ from dotenv import load_dotenv
 from typing import Optional, Any, Dict, List, Literal, Tuple
 from datetime import date
 try:
-    from .database import init_db, save_analysis, get_last_analysis, get_last_decision_for_symbol, get_user_profile, save_portfolio_analysis, get_symbol_analysis_history, get_memory_context, should_send_notification, log_notification, get_cached_market_bars, get_last_bar_date, upsert_market_bars, get_cached_range, get_missing_dates, generate_event_key, log_llm_usage, get_monthly_llm_usage, get_connection, get_latest_portfolio_analysis, save_portfolio_analysis_mentor, find_similar_analyses, get_deep_decision_cache, set_deep_decision_cache, get_relevant_symbols_for_news
+    from .database import init_db, save_analysis, get_last_analysis, get_last_decision_for_symbol, get_user_profile, save_portfolio_analysis, get_symbol_analysis_history, get_memory_context, should_send_notification, log_notification, get_cached_market_bars, get_last_bar_date, upsert_market_bars, get_cached_range, get_missing_dates, generate_event_key, log_llm_usage, get_monthly_llm_usage, get_connection, get_latest_portfolio_analysis, save_portfolio_analysis_mentor, find_similar_analyses, get_deep_decision_cache, set_deep_decision_cache, get_relevant_symbols_for_news, get_analyses_pending_outcome, save_symbol_outcome, get_symbol_learning_context, get_symbol_accuracy_stats
     from .schemas import MASTER_ANALYSIS_SCHEMA, NEW_ANALYSIS_SCHEMA, PORTFOLIO_DEEP_SCHEMA, CANONICAL_DECISION_SCHEMA, DEEP_NARRATIVE_PATCH_SCHEMA
     from .news_analyzer import analyze_news_item
     from .canonical_decision import CanonicalDecisionResponse
 except ImportError:
-    from database import init_db, save_analysis, get_last_analysis, get_last_decision_for_symbol, get_user_profile, save_portfolio_analysis, get_symbol_analysis_history, get_memory_context, should_send_notification, log_notification, get_cached_market_bars, get_last_bar_date, upsert_market_bars, get_cached_range, get_missing_dates, generate_event_key, log_llm_usage, get_monthly_llm_usage, get_connection, get_latest_portfolio_analysis, save_portfolio_analysis_mentor, find_similar_analyses, get_deep_decision_cache, set_deep_decision_cache, get_relevant_symbols_for_news
+    from database import init_db, save_analysis, get_last_analysis, get_last_decision_for_symbol, get_user_profile, save_portfolio_analysis, get_symbol_analysis_history, get_memory_context, should_send_notification, log_notification, get_cached_market_bars, get_last_bar_date, upsert_market_bars, get_cached_range, get_missing_dates, generate_event_key, log_llm_usage, get_monthly_llm_usage, get_connection, get_latest_portfolio_analysis, save_portfolio_analysis_mentor, find_similar_analyses, get_deep_decision_cache, set_deep_decision_cache, get_relevant_symbols_for_news, get_analyses_pending_outcome, save_symbol_outcome, get_symbol_learning_context, get_symbol_accuracy_stats
     from schemas import MASTER_ANALYSIS_SCHEMA, NEW_ANALYSIS_SCHEMA, PORTFOLIO_DEEP_SCHEMA, CANONICAL_DECISION_SCHEMA, DEEP_NARRATIVE_PATCH_SCHEMA
     from news_analyzer import analyze_news_item
     from canonical_decision import CanonicalDecisionResponse
@@ -1186,6 +1186,123 @@ def get_last_known_price_from_db(symbol: str) -> Optional[float]:
     except Exception as e:
         print(f"⚠️ get_last_known_price_from_db error for {symbol}: {e}")
         return None
+
+
+# ============================================================================
+# SELF-IMPROVING AI: Outcome tracking + learning context
+# ============================================================================
+
+def compute_pending_outcomes():
+    """
+    Background job: for each past analysis without an outcome, check if
+    enough time has passed and compute whether the prediction was correct.
+    Called by APScheduler every 6 hours.
+    """
+    HORIZONS = [7, 14, 30]
+    for horizon in HORIZONS:
+        try:
+            pending = get_analyses_pending_outcome(horizon_days=horizon)
+            if not pending:
+                continue
+            print(f"[outcomes] checking {len(pending)} analyses for {horizon}d horizon")
+            for row in pending:
+                symbol = row["symbol"]
+                verdict = row.get("verdict") or ""
+                confidence = row.get("confidence") or 50
+                price_at_analysis = row.get("price_at_analysis") or 0
+                if price_at_analysis <= 0:
+                    continue
+                # Get current price via fastest available method
+                current_price = None
+                try:
+                    current_price = _get_price_yahoo_direct(symbol)
+                except Exception:
+                    pass
+                if not current_price or current_price <= 0:
+                    try:
+                        metrics = get_technical_metrics(symbol)
+                        current_price = metrics.get("fiyat") if metrics else None
+                    except Exception:
+                        pass
+                if not current_price or current_price <= 0:
+                    continue
+                change_pct = ((current_price - price_at_analysis) / price_at_analysis) * 100
+                # Was the verdict correct?
+                v_upper = verdict.upper()
+                if v_upper in ("AL", "BUY", "GÜÇLÜ AL"):
+                    verdict_correct = 1 if change_pct > 1.0 else 0
+                elif v_upper in ("SAT", "SELL", "GÜÇLÜ SAT"):
+                    verdict_correct = 1 if change_pct < -1.0 else 0
+                else:  # TUT / HOLD
+                    verdict_correct = 1 if abs(change_pct) < 5.0 else 0
+                save_symbol_outcome(
+                    analysis_id=row["id"],
+                    symbol=symbol,
+                    verdict=verdict,
+                    confidence=confidence,
+                    price_at_analysis=price_at_analysis,
+                    horizon_days=horizon,
+                    price_at_check=current_price,
+                    price_change_pct=round(change_pct, 2),
+                    verdict_correct=verdict_correct,
+                )
+                print(f"[outcomes] {symbol} {verdict} → {change_pct:+.1f}% ({horizon}d) correct={verdict_correct}")
+        except Exception as e:
+            print(f"⚠️ [outcomes] horizon={horizon}: {e}")
+
+
+def build_learning_context(symbol: str) -> str:
+    """
+    Build a self-improvement prompt block from past analyses + outcomes.
+    Injected into the Gemini prompt so the AI learns from its own history.
+    """
+    try:
+        records = get_symbol_learning_context(symbol, limit=8)
+        stats = get_symbol_accuracy_stats(symbol)
+
+        if not records and not stats:
+            return ""
+
+        lines = [f"\n=== GEÇMİŞ ANALİZ HAFIZASI ({symbol}) ==="]
+
+        # Accuracy summary
+        if stats and stats.get("total"):
+            acc = stats.get("accuracy_pct")
+            total = stats.get("total", 0)
+            avg_buy = stats.get("avg_buy_change")
+            lines.append(f"Geçmiş {total} analizden doğruluk oranı: %{acc or '?'}")
+            if avg_buy is not None:
+                lines.append(f"AL kararı sonrası ortalama fiyat değişimi: {avg_buy:+.1f}%")
+
+        # Individual past analyses with outcomes
+        if records:
+            lines.append("\nSon analizler ve gerçekleşen sonuçlar:")
+            for r in records:
+                date_str = (r.get("created_at") or "")[:10]
+                verdict = r.get("verdict", "?")
+                conf = r.get("confidence", "?")
+                change = r.get("price_change_pct")
+                correct = r.get("verdict_correct")
+                horizon = r.get("horizon_days", "?")
+                summary = (r.get("summary") or "")[:80]
+                change_str = f"{change:+.1f}%" if change is not None else "?"
+                correct_str = "✓ DOĞRU" if correct == 1 else "✗ YANLIŞ"
+                lines.append(
+                    f"- {date_str}: {verdict} (%{conf} güven) → {horizon}g sonra {change_str} {correct_str}"
+                )
+                if summary:
+                    lines.append(f"  Özet: {summary}")
+
+        lines.append(
+            "\nBu geçmiş verileri dikkate alarak yeni analizini kalibre et. "
+            "Eğer geçmiş AL kararların çoğunlukla yanlış çıktıysa daha temkinli ol. "
+            "Eğer doğruluk oranı yüksekse, teknik sinyallere güveni artır."
+        )
+        lines.append("=== HAFIZA SONU ===\n")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"⚠️ build_learning_context error: {e}")
+        return ""
 
 
 def get_technical_metrics(symbol):
@@ -4928,6 +5045,9 @@ USER PROFILE:
     
     # STEP 2: Build comparative context (Context-Aware Memory System)
     comparative_context = build_comparative_context(prev_decision, price, technical_context)
+
+    # STEP 2b: Build self-improvement learning context from past outcome data
+    learning_context = build_learning_context(symbol)
     
     # STEP 3: Build fundamental data section (ARCHITECT MANDATE)
     fundamental_str = ""
@@ -5018,6 +5138,8 @@ NEWS CONTEXT (Top 3 Critical)
 PAST ANALYSIS MEMORY
 ═══════════════════════════════════════════════════════════════
 {memory_str}
+
+{learning_context}
 
 {comparative_context}
 
