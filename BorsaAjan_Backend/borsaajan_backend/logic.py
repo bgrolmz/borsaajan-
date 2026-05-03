@@ -1268,17 +1268,35 @@ def get_technical_metrics(symbol):
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14).mean()
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
-        
-        # Bollinger
-        sma = hist['Close'].rolling(window=20).mean()
-        std = hist['Close'].rolling(window=20).std()
-        upper = sma + (std * 2)
-        lower = sma - (std * 2)
 
-        # Format price based on value (crypto can be very small or very large)
+        # Bollinger Bands (SMA 20)
+        sma20 = hist['Close'].rolling(window=20).mean()
+        std = hist['Close'].rolling(window=20).std()
+        upper = sma20 + (std * 2)
+        lower = sma20 - (std * 2)
+
+        # MACD (12, 26, 9)
+        ema12 = hist['Close'].ewm(span=12, adjust=False).mean()
+        ema26 = hist['Close'].ewm(span=26, adjust=False).mean()
+        macd_line = ema12 - ema26
+        macd_signal = macd_line.ewm(span=9, adjust=False).mean()
+        macd_hist = macd_line - macd_signal
+
+        # Moving Averages
+        sma50 = hist['Close'].rolling(window=50).mean()
+        sma200 = hist['Close'].rolling(window=200).mean()
+
+        # Momentum (10)
+        momentum10 = hist['Close'].diff(10)
+
+        # Stochastic %K (14,3)
+        low14 = hist['Low'].rolling(window=14).min()
+        high14 = hist['High'].rolling(window=14).max()
+        stoch_k = 100 * (hist['Close'] - low14) / (high14 - low14 + 1e-10)
+
+        # Format price based on value
         crypto = is_crypto(symbol)
         if crypto:
-            # For crypto, use more decimal places if price is small
             if current < 1:
                 price_precision = 6
             elif current < 100:
@@ -1287,6 +1305,13 @@ def get_technical_metrics(symbol):
                 price_precision = 2
         else:
             price_precision = 2
+
+        def _safe_val(series, precision=2):
+            try:
+                v = series.iloc[-1]
+                return round(float(v), precision) if v == v else None  # NaN check
+            except Exception:
+                return None
 
         # Determine which price to show as "current"
         if active_price_type == "pre_market" and pre_market_price:
@@ -1297,14 +1322,23 @@ def get_technical_metrics(symbol):
             display_price = current
 
         return {
-            "fiyat": round(current, price_precision),  # Regular session close
-            "current_price": round(display_price, price_precision),  # Active price (pre/post if applicable)
+            "fiyat": round(current, price_precision),
+            "current_price": round(display_price, price_precision),
             "pre_market_price": round(pre_market_price, price_precision) if pre_market_price else None,
             "post_market_price": round(post_market_price, price_precision) if post_market_price else None,
-            "active_price_type": active_price_type,  # Which price is currently active
-            "rsi": round(rsi.iloc[-1], 2),
-            "bb_alt": round(lower.iloc[-1], price_precision),
-            "bb_ust": round(upper.iloc[-1], price_precision)
+            "active_price_type": active_price_type,
+            "rsi": _safe_val(rsi),
+            "bb_alt": _safe_val(lower, price_precision),
+            "bb_ust": _safe_val(upper, price_precision),
+            "bb_orta": _safe_val(sma20, price_precision),
+            "macd": _safe_val(macd_line, 4),
+            "macd_signal": _safe_val(macd_signal, 4),
+            "macd_hist": _safe_val(macd_hist, 4),
+            "momentum": _safe_val(momentum10, price_precision),
+            "stoch_k": _safe_val(stoch_k),
+            "sma20": _safe_val(sma20, price_precision),
+            "sma50": _safe_val(sma50, price_precision),
+            "sma200": _safe_val(sma200, price_precision),
         }
     except Exception as e:
         print(f"⚠️ Technical metrics error for {symbol}: {e}")

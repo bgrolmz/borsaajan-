@@ -413,23 +413,41 @@
                                 </div>
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
                                     <span class="text-xs text-[#b9cbbd]">MACD</span>
+                                    @{
+                                        var macdVal = tech?.Macd;
+                                        var macdSig = tech?.Macd_Signal;
+                                        var macdBullish = macdVal.HasValue && macdSig.HasValue && macdVal > macdSig;
+                                        var macdBearish = macdVal.HasValue && macdSig.HasValue && macdVal < macdSig;
+                                        var macdLabel = macdBullish ? "AL" : macdBearish ? "SAT" : "NÖTR";
+                                        var macdCss = macdBullish ? "bg-[#00FFA3]/10 text-[#00FFA3]" : macdBearish ? "bg-[#ff4d4d]/10 text-[#ff4d4d]" : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#b9cbbd]/10 text-[#b9cbbd]">NÖTR</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(macdVal.HasValue ? macdVal.Value.ToString("F4") : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @macdCss">@macdLabel</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
                                     <span class="text-xs text-[#b9cbbd]">Momentum (10)</span>
+                                    @{
+                                        var momVal = tech?.Momentum;
+                                        var momLabel = momVal.HasValue ? (momVal > 0 ? "AL" : momVal < 0 ? "SAT" : "NÖTR") : "NÖTR";
+                                        var momCss = momVal.HasValue ? (momVal > 0 ? "bg-[#00FFA3]/10 text-[#00FFA3]" : momVal < 0 ? "bg-[#ff4d4d]/10 text-[#ff4d4d]" : "bg-[#b9cbbd]/10 text-[#b9cbbd]") : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#00FFA3]/10 text-[#00FFA3]">AL</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(momVal.HasValue ? momVal.Value.ToString("F2") : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @momCss">@momLabel</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
                                     <span class="text-xs text-[#b9cbbd]">Stokastik %K</span>
+                                    @{
+                                        var stochVal = tech?.Stoch_K;
+                                        var stochLabel = stochVal.HasValue ? (stochVal > 80 ? "SAT" : stochVal < 20 ? "AL" : "NÖTR") : "NÖTR";
+                                        var stochCss = stochVal.HasValue ? (stochVal > 80 ? "bg-[#ff4d4d]/10 text-[#ff4d4d]" : stochVal < 20 ? "bg-[#00FFA3]/10 text-[#00FFA3]" : "bg-[#b9cbbd]/10 text-[#b9cbbd]") : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#b9cbbd]/10 text-[#b9cbbd]">NÖTR</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(stochVal.HasValue ? stochVal.Value.ToString("F1") : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @stochCss">@stochLabel</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5">
@@ -449,30 +467,54 @@
                             <div class="space-y-0">
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
                                     <span class="text-xs text-[#b9cbbd]">SMA 20</span>
+                                    @{
+                                        var sma20v = tech?.Sma20;
+                                        var sma20AbovePrice = sma20v.HasValue && currentPrice > 0 && currentPrice > sma20v.Value;
+                                        var sma20Label = sma20v.HasValue ? (sma20AbovePrice ? "AL" : "SAT") : "NÖTR";
+                                        var sma20Css = sma20v.HasValue ? (sma20AbovePrice ? "bg-[#00FFA3]/10 text-[#00FFA3]" : "bg-[#ff4d4d]/10 text-[#ff4d4d]") : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#00FFA3]/10 text-[#00FFA3]">AL</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(sma20v.HasValue ? "$" + FormatFiyat(sma20v.Value) : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @sma20Css">@sma20Label</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
-                                    <span class="text-xs text-[#b9cbbd]">EMA 50</span>
+                                    <span class="text-xs text-[#b9cbbd]">SMA 50</span>
+                                    @{
+                                        var sma50v = tech?.Sma50;
+                                        var sma50AbovePrice = sma50v.HasValue && currentPrice > 0 && currentPrice > sma50v.Value;
+                                        var sma50Label = sma50v.HasValue ? (sma50AbovePrice ? "GÜÇLÜ AL" : "SAT") : "NÖTR";
+                                        var sma50Css = sma50v.HasValue ? (sma50AbovePrice ? "bg-[#00FFA3]/10 text-[#00FFA3]" : "bg-[#ff4d4d]/10 text-[#ff4d4d]") : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#00FFA3]/10 text-[#00FFA3]">GÜÇLÜ AL</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(sma50v.HasValue ? "$" + FormatFiyat(sma50v.Value) : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @sma50Css">@sma50Label</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
                                     <span class="text-xs text-[#b9cbbd]">SMA 200</span>
+                                    @{
+                                        var sma200v = tech?.Sma200;
+                                        var sma200AbovePrice = sma200v.HasValue && currentPrice > 0 && currentPrice > sma200v.Value;
+                                        var sma200Label = sma200v.HasValue ? (sma200AbovePrice ? "GÜÇLÜ AL" : "GÜÇLÜ SAT") : "NÖTR";
+                                        var sma200Css = sma200v.HasValue ? (sma200AbovePrice ? "bg-[#00FFA3]/10 text-[#00FFA3]" : "bg-[#ff4d4d]/10 text-[#ff4d4d]") : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#00FFA3]/10 text-[#00FFA3]">GÜÇLÜ AL</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(sma200v.HasValue ? "$" + FormatFiyat(sma200v.Value) : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @sma200Css">@sma200Label</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5 border-b border-[#3a4a3f]/10">
                                     <span class="text-xs text-[#b9cbbd]">BB Orta (SMA 20)</span>
+                                    @{
+                                        var bbOrtaV = tech?.Bb_Orta;
+                                        var bbOrtaAbove = bbOrtaV.HasValue && currentPrice > 0 && currentPrice > bbOrtaV.Value;
+                                        var bbOrtaLabel = bbOrtaV.HasValue ? (bbOrtaAbove ? "AL" : "NÖTR") : "NÖTR";
+                                        var bbOrtaCss = bbOrtaV.HasValue && bbOrtaAbove ? "bg-[#00FFA3]/10 text-[#00FFA3]" : "bg-[#b9cbbd]/10 text-[#b9cbbd]";
+                                    }
                                     <div class="flex items-center gap-3">
-                                        <span class="text-xs font-semibold text-[#dae2fd]">—</span>
-                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-[#b9cbbd]/10 text-[#b9cbbd]">NÖTR</span>
+                                        <span class="text-xs font-semibold text-[#dae2fd]">@(bbOrtaV.HasValue ? "$" + FormatFiyat(bbOrtaV.Value) : "—")</span>
+                                        <span class="text-[10px] px-2 py-0.5 rounded font-bold @bbOrtaCss">@bbOrtaLabel</span>
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center py-2.5">

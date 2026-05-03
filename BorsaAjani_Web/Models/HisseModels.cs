@@ -106,6 +106,24 @@ public class FiyatBilgisi
     public double Bb_Alt { get; set; }
     [JsonPropertyName("bb_ust")]
     public double Bb_Ust { get; set; }
+    [JsonPropertyName("bb_orta")]
+    public double? Bb_Orta { get; set; }
+    [JsonPropertyName("macd")]
+    public double? Macd { get; set; }
+    [JsonPropertyName("macd_signal")]
+    public double? Macd_Signal { get; set; }
+    [JsonPropertyName("macd_hist")]
+    public double? Macd_Hist { get; set; }
+    [JsonPropertyName("momentum")]
+    public double? Momentum { get; set; }
+    [JsonPropertyName("stoch_k")]
+    public double? Stoch_K { get; set; }
+    [JsonPropertyName("sma20")]
+    public double? Sma20 { get; set; }
+    [JsonPropertyName("sma50")]
+    public double? Sma50 { get; set; }
+    [JsonPropertyName("sma200")]
+    public double? Sma200 { get; set; }
 }
 
 public class PiyasaBilgisi
