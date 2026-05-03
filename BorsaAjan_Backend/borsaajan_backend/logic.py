@@ -81,7 +81,7 @@ def _discover_model(client, prefer_flash: bool = True) -> Optional[str]:
     
     try:
         # Fast path: try preferred model first without iterating all models
-        for preferred in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite"):
+        for preferred in ("gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"):
             try:
                 model_info = client.models.get(model=preferred)
                 if model_info and "generateContent" in model_info.supported_actions:
@@ -658,14 +658,27 @@ def safe_gemini_call(
 
     time.sleep(5)
 
-    config = genai_types.GenerateContentConfig(
+    # gemini-2.5-flash is a thinking model — disable thinking for JSON calls
+    # so response.text contains only the JSON, not reasoning tokens
+    thinking_config = None
+    try:
+        thinking_config = genai_types.ThinkingConfig(thinking_budget=0)
+    except Exception:
+        pass  # SDK version doesn't support ThinkingConfig
+
+    config_kwargs = dict(
         temperature=temperature,
         max_output_tokens=max_output_tokens,
         response_mime_type="application/json",
     )
+    if thinking_config is not None:
+        config_kwargs["thinking_config"] = thinking_config
+
+    config = genai_types.GenerateContentConfig(**config_kwargs)
 
     global _CACHED_MODEL_NAME  # declared once at function scope
-    _FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+    # gemini-2.0-flash first: proven reliable JSON, non-thinking
+    _FALLBACK_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
     _API_MAX_RETRIES = 3
 
     last_api_error = None
@@ -677,9 +690,25 @@ def safe_gemini_call(
                 contents=prompt,
                 config=config,
             )
-            raw = response.text
+            # For thinking models: response.parts may have separate thought/text parts.
+            # Collect only non-thought text parts to avoid reasoning tokens polluting JSON.
+            raw = None
+            if hasattr(response, "candidates") and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, "content") and candidate.content:
+                    text_parts = []
+                    for part in candidate.content.parts:
+                        if hasattr(part, "thought") and part.thought:
+                            continue  # skip thinking tokens
+                        if hasattr(part, "text") and part.text:
+                            text_parts.append(part.text)
+                    if text_parts:
+                        raw = "".join(text_parts)
+            if not raw:
+                raw = response.text  # fallback to convenience property
             if not raw:
                 raise GeminiCallError("Empty response", reason="empty_response")
+            print(f"[gemini] raw response (first 200): {raw[:200]}")
             _register_gemini_call()
             if current_model != discovered_model:
                 _CACHED_MODEL_NAME = current_model
