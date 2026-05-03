@@ -18,7 +18,9 @@
       "Bash(\"c:/Users/msi-nb/Desktop/Borsa_Projem/BorsaAjan_Backend/venv/Scripts/pip.exe\" list:*)",
       "Bash(\"c:/Users/msi-nb/Desktop/Borsa_Projem/BorsaAjan_Backend/venv/Scripts/pip.exe\" freeze:*)",
       "Bash(venv/Scripts/python.exe -m py_compile borsaajan_backend/database.py)",
-      "Bash(grep -E \"\\\\.py$\")"
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(curl -s \"https://borsaajan-production.up.railway.app/ai-insight/NVDA?mode=normal&use_llm=1\")",
+      "Bash(curl -s \"https://borsaajan-production.up.railway.app/health\")"
     ]
   }
 }
