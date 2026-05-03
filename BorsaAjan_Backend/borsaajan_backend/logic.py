@@ -1199,7 +1199,7 @@ def get_technical_metrics(symbol):
         import logging as _logging
         _logging.getLogger("yfinance").setLevel(_logging.CRITICAL)
         stock = yf.Ticker(normalized_symbol)
-        hist = stock.history(period="1mo")
+        hist = stock.history(period="1y")  # 1 year for SMA 50/200 calculation
         if hist.empty:
             raise ValueError(f"yfinance returned empty history for {normalized_symbol}")
         current = hist['Close'].iloc[-1]
