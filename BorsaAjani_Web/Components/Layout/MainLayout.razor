@@ -1,46 +1,98 @@
 @inherits LayoutComponentBase
 
 <HeadContent>
-    <link rel="stylesheet" href="css/app.css" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1326" />
+
+    @* ── Fonts (preconnect → faster first paint) ── *@
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@@20..48,100..700,0..1,-50..200&display=optional" />
+
+    @* ── Tailwind (CDN — dev only; swap for local build in prod) ── *@
+    <script src="https://cdn.tailwindcss.com?plugins=forms" defer></script>
     <script>
-        tailwind.config = {
+        // Run after Tailwind CDN is ready
+        window.__tailwindConfig = {
             theme: {
                 extend: {
                     colors: {
                         'ot-bg':      '#0b1326',
                         'ot-surface': '#171f33',
+                        'ot-card':    '#131b2e',
+                        'ot-border':  '#2d3449',
                         'ot-primary': '#00FFA3',
                         'ot-accent':  '#dae2fd',
+                        'ot-muted':   '#b9cbbd',
                         'ot-danger':  '#ff4d4d',
                         'ot-warning': '#ffcc00',
                     },
                     fontFamily: {
-                        'manrope': ['Manrope', 'Inter', 'sans-serif'],
+                        sans: ['Manrope', 'Inter', 'system-ui', 'sans-serif'],
                     },
-                    borderRadius: {
-                        'ot': '4px',
-                    }
                 }
             }
-        }
+        };
+        // Apply config once Tailwind is available
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.tailwind) tailwind.config = window.__tailwindConfig;
+        });
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@@20..48,100..700,0..1,-50..200" />
+
+    @* ── App CSS ── *@
+    <link rel="stylesheet" href="css/app.css" />
 </HeadContent>
 
+@* ── PAGE SHELL ── *@
 <div class="page">
     <main>
         <article class="content">
             @Body
         </article>
     </main>
-    
 </div>
 
-@* ApexCharts for interactive charts - load before Blazor *@
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script src="js/apexcharts-init.js"></script>
-@* Blazor Server script - must be in body *@
+@* ══════════════════════════════════════════════════════════════
+   BLAZOR RECONNECT OVERLAY
+   Blazor manages display via CSS classes:
+     .components-reconnect-show    → trying to reconnect
+     .components-reconnect-hide    → connected  (hidden)
+     .components-reconnect-failed  → gave up
+     .components-reconnect-rejected → server rejected
+   ══════════════════════════════════════════════════════════════ *@
+<div id="components-reconnect-modal" class="rc-overlay">
+    <div class="rc-card">
+        <div class="rc-icon">
+            <span class="rc-spinner"></span>
+        </div>
+        <div class="rc-body">
+            <p class="rc-title">Bağlantı yenileniyor</p>
+            <p class="rc-sub">Sunucuyla bağlantı geçici olarak kesildi.</p>
+        </div>
+    </div>
+    <div class="rc-card rc-failed-card" style="display:none">
+        <div class="rc-icon">⚠️</div>
+        <div class="rc-body">
+            <p class="rc-title">Bağlantı kurulamadı</p>
+            <a href="javascript:location.reload()" class="rc-reload-btn">Sayfayı yenile</a>
+        </div>
+    </div>
+</div>
+
+@* ── BLAZOR ERROR BAR ── *@
+<div id="blazor-error-ui" class="bz-error-bar">
+    <span>⚠️ Beklenmedik bir hata oluştu.</span>
+    <a href="javascript:location.reload()" class="bz-error-link">Yenile</a>
+    <button onclick="document.getElementById('blazor-error-ui').style.display='none'" class="bz-error-close">✕</button>
+</div>
+
+@* ── ApexCharts ── *@
+<script src="https://cdn.jsdelivr.net/npm/apexcharts" defer></script>
+<script src="js/apexcharts-init.js" defer></script>
+
+@* ── Reconnect & keepalive script ── *@
+<script src="js/reconnect.js" defer></script>
+
+@* ── Blazor runtime (must NOT be deferred) ── *@
 <script src="_framework/blazor.web.js"></script>
