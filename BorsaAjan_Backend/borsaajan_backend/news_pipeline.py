@@ -701,6 +701,9 @@ def _build_mentor_card(
         card["risk"] = analysis.get("risk", "")
         card["market_impact"] = analysis.get("market_impact", "NEUTRAL")
         card["impact_reason"] = analysis.get("impact_reason", "")
+        card["strategic_advice"] = analysis.get("strategic_advice", "")
+        card["comment"] = analysis.get("comment", "")
+        card["risk_detail"] = analysis.get("risk_detail", "")
     
     # Add title from news_item for notifications
     card["title"] = news_item.get("title", "")
@@ -755,26 +758,75 @@ def _process_notifications(
         if should_send:
             log_notification(symbol, event_key, confidence, title=title)
             print(f"[HERMES] Notification logged: symbol={symbol} confidence={confidence}")
-            
+
             # Hermes: Send Telegram notification if using watchlist
             if use_watchlist:
                 try:
-                    # Determine notification type based on importance score
+                    from .notification_service import send_telegram_message, save_notification_to_db
+
                     notification_type = "CRITICAL" if confidence >= 80 else "ALERT"
-                    
-                    # Add urgency indicator for critical news
-                    formatted_title = f"🚨 CRITICAL: {title}" if confidence >= 80 else title
-                    
-                    notification_result = send_and_save_notification(
+
+                    # --- Zengin Telegram mesajı oluştur ---
+                    impact_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(market_impact, "🟡")
+                    impact_tr = {"POSITIVE": "Pozitif 📈", "NEGATIVE": "Negatif 📉"}.get(market_impact, "Nötr ➡️")
+                    urgency = "🚨 " if confidence >= 80 else "📊 "
+
+                    # Başlık satırı
+                    title_short = title[:100] if title else mentor_summary[:80]
+                    lines = [
+                        f"{urgency}*{symbol}* — {title_short}",
+                        "",
+                    ]
+
+                    # Ne oldu
+                    what = card.get("what_happened", "")
+                    if what:
+                        lines += [f"❓ *Ne oldu?*", what, ""]
+
+                    # Neden önemli
+                    why = card.get("why_it_matters", "")
+                    if not why:
+                        why = impact_reason or mentor_summary
+                    if why:
+                        lines += [f"🔍 *Neden önemli?*", why[:300], ""]
+
+                    # Etki + Güven skoru
+                    lines.append(f"{impact_emoji} *Etki:* {impact_tr} | 📊 *Güven:* {confidence}/100")
+                    lines.append("")
+
+                    # Yatırımcı stratejisi
+                    strategy = card.get("strategic_advice", "") or card.get("mentor_action", "")
+                    if strategy:
+                        lines += [f"🎯 *Strateji:*", strategy[:300], ""]
+
+                    # Risk
+                    risk_txt = card.get("risk", "") or card.get("risk_detail", "")
+                    if risk_txt:
+                        lines += [f"⚠️ *Risk:*", risk_txt[:200], ""]
+
+                    # Analist yorumu
+                    comment_txt = card.get("comment", "")
+                    if comment_txt:
+                        lines += [f"💬 *Analist Yorumu:*", comment_txt[:300], ""]
+
+                    lines.append("_Borsa Ajanı Mentor_")
+
+                    rich_message = "\n".join(lines)
+
+                    # Telegram'a gönder
+                    telegram_sent = send_telegram_message(rich_message, parse_mode="Markdown")
+
+                    # DB'ye kaydet
+                    save_notification_to_db(
                         symbol=symbol,
+                        title=title_short,
+                        message=rich_message.replace("*", "").replace("_", ""),
+                        notification_type=notification_type,
                         impact=market_impact,
                         reason=impact_reason or mentor_summary[:100],
-                        title=formatted_title,
-                        mentor_summary=mentor_summary,
-                        notification_type=notification_type
                     )
-                    
-                    if notification_result.get("telegram_sent"):
+
+                    if telegram_sent:
                         criticality_msg = "CRITICAL" if confidence >= 80 else "ALERT"
                         print(f"[HERMES] ✅ Telegram {criticality_msg} sent: {symbol} (Impact: {market_impact}, Score: {confidence})")
                     else:

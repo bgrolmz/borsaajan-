@@ -186,36 +186,10 @@ def initialize_scheduler():
         from .services.alert_system import send_market_summary, check_critical_news
         print("✅ Alert system functions imported successfully")
         
-        # Schedule market summary at 17:45, 20:30, and 23:45 daily
-        scheduler.add_job(
-            send_market_summary,
-            trigger=CronTrigger(hour=17, minute=45, timezone=tz),
-            id='market_summary_1745',
-            replace_existing=True
-        )
-        scheduler.add_job(
-            send_market_summary,
-            trigger=CronTrigger(hour=20, minute=30, timezone=tz),
-            id='market_summary_2030',
-            replace_existing=True
-        )
-        scheduler.add_job(
-            send_market_summary,
-            trigger=CronTrigger(hour=23, minute=45, timezone=tz),
-            id='market_summary_2345',
-            replace_existing=True
-        )
-        print("✅ Market summary scheduled at 17:45, 20:30, and 23:45 daily")
-        
-        # Schedule critical news check (configurable interval)
-        news_interval = int(os.getenv("NEWS_INTERVAL_MINUTES", "15"))
-        scheduler.add_job(
-            check_critical_news,
-            trigger=IntervalTrigger(minutes=news_interval),
-            id='critical_news_check',
-            replace_existing=True
-        )
-        print(f"✅ Critical news check scheduled every {news_interval} minutes")
+        # GeminiBorsaBot (eski bot) DEVRE DIŞI — spam yapıyor (150+ mesaj/gün)
+        # send_market_summary ve check_critical_news artık çalışmıyor.
+        # Yeni bot (Hermes / news_pipeline) bu görevleri üstlendi.
+        print("⏭️  GeminiBorsaBot jobları devre dışı (send_market_summary, check_critical_news)")
         
         # Schedule QUICK portfolio analysis (configurable times)
         quick_times_str = os.getenv("QUICK_SCHEDULE_TIMES", "09:00,21:00")
