@@ -105,6 +105,9 @@ async def lifespan(app: FastAPI):
         
         # Initialize database tables
         init_db()
+        # Initialize paper trading tables
+        from .paper_trading import init_paper_trading_tables
+        init_paper_trading_tables()
         
         # Run integrity check
         try:
@@ -2206,3 +2209,96 @@ def news_history_all(limit: int = 50):
 def news_history(symbol: str, limit: int = 20):
     data = get_news_history(symbol.upper(), limit=limit)
     return {"symbol": symbol.upper(), "count": len(data), "history": data}
+
+
+# ============================================================================
+# PAPER TRADING ENDPOINTS
+# ============================================================================
+
+from .paper_trading import (
+    init_paper_trading_tables, get_portfolio as pt_get_portfolio,
+    buy as pt_buy, sell as pt_sell,
+    get_trade_history, reset_portfolio
+)
+
+class BuyOrderRequest(BaseModel):
+    symbol: str
+    shares: float
+
+class SellOrderRequest(BaseModel):
+    symbol: str
+    shares: float
+
+@app.get("/paper/portfolio")
+def paper_portfolio():
+    """Get paper trading portfolio: cash, positions, PnL."""
+    try:
+        return pt_get_portfolio()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/paper/buy")
+def paper_buy(order: BuyOrderRequest):
+    """Simulate a BUY order."""
+    if order.shares <= 0:
+        raise HTTPException(status_code=400, detail="shares must be > 0")
+    result = pt_buy(order.symbol, order.shares)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@app.post("/paper/sell")
+def paper_sell(order: SellOrderRequest):
+    """Simulate a SELL order."""
+    if order.shares <= 0:
+        raise HTTPException(status_code=400, detail="shares must be > 0")
+    result = pt_sell(order.symbol, order.shares)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@app.get("/paper/trades")
+def paper_trades(limit: int = 50):
+    """Get trade history."""
+    return {"trades": get_trade_history(limit)}
+
+@app.post("/paper/reset")
+def paper_reset(starting_cash: float = 100000.0):
+    """Reset paper portfolio."""
+    return reset_portfolio(starting_cash)
+
+
+# ============================================================================
+# FINANCIAL AGENT ENDPOINTS
+# ============================================================================
+
+from .financial_agent import analyze_ticker
+
+class AnalyzeRequest(BaseModel):
+    symbol: str
+    portfolio_size: float = 10000
+    target_upside_pct: float = 15.0
+    stop_loss_pct: float = 7.0
+    prior_probability: Optional[float] = None
+
+@app.post("/analyze")
+def analyze_stock(req: AnalyzeRequest):
+    """Full stock analysis: EV + Kelly + Bayes + AI commentary."""
+    result = analyze_ticker(
+        symbol=req.symbol,
+        portfolio_size=req.portfolio_size,
+        target_upside_pct=req.target_upside_pct,
+        stop_loss_pct=req.stop_loss_pct,
+        prior_probability=req.prior_probability,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Analysis failed"))
+    return result
+
+@app.get("/analyze/{symbol}")
+def analyze_stock_get(symbol: str, portfolio_size: float = 10000):
+    """Quick GET endpoint for stock analysis."""
+    result = analyze_ticker(symbol=symbol, portfolio_size=portfolio_size)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Analysis failed"))
+    return result
