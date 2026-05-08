@@ -2354,6 +2354,25 @@ def analyze_stock(req: AnalyzeRequest):
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Analysis failed"))
+    try:
+        from .database import save_analysis as _save_analysis
+        mode = "CRYPTO" if "-USD" in (req.symbol or "").upper() else "STOCK"
+        summary = (result.get("ai_commentary") or result.get("summary") or "")[:500]
+        decision = (result.get("decision") or "").upper()
+        risk_level = 3 if decision in ("BUY", "AL") else (1 if decision in ("SELL", "SAT") else 2)
+        price_at = float(result.get("current_price") or result.get("price") or 0.0)
+        _save_analysis(
+            symbol=req.symbol,
+            mode=mode,
+            raw_prompt="",
+            raw_response="",
+            summary=summary,
+            risk_level=risk_level,
+            full_analysis_json=result,
+            price_at_analysis=price_at,
+        )
+    except Exception as e:
+        print(f"[analyze] save_analysis failed: {e}")
     return result
 
 @app.get("/analyze/{symbol}")

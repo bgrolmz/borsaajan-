@@ -143,7 +143,8 @@ public class FinansalAjanService
                 {
                     Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() : null,
                     Mode = el.TryGetProperty("mode", out var m) ? m.GetString() : "STOCK",
-                    AddedAt = el.TryGetProperty("added_at", out var a) ? a.GetString() : null,
+                    AddedAt = el.TryGetProperty("added_at", out var a) ? a.GetString()
+                            : (el.TryGetProperty("created_at", out var ca) ? ca.GetString() : null),
                 });
             }
             return items;
