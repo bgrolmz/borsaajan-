@@ -310,10 +310,10 @@ def _fallback_analysis(symbol: str, data: dict, ev: dict, kelly: dict) -> str:
     """Simple text output when Gemini unavailable."""
     verdict = ev.get("verdict", "SKIP")
     return (
-        f"{symbol} analizi tamamlandı.\n"
+        f"{symbol} analizi tamamlandi.\n"
         f"Fiyat: ${data.get('price', 'N/A')} | EV: ${ev.get('ev', 0):.2f}\n"
         f"Karar: {verdict} | Kelly: %{kelly.get('capped_pct', 0):.1f}\n"
-        f"(AI yorumu şu an mevcut değil)"
+        f"(AI yorumu su an mevcut degil)"
     )
 
 
@@ -387,13 +387,13 @@ def analyze_ticker(
 
     if final_ev["ev"] > 0 and updated_p >= 0.55:
         verdict = "AL"
-        confidence = "YÜKSEK" if updated_p >= 0.65 else "ORTA"
+        confidence = "YUKSEK" if updated_p >= 0.65 else "ORTA"
     elif final_ev["ev"] < 0 or updated_p < 0.40:
-        verdict = "SAT/KAÇIN"
-        confidence = "YÜKSEK" if updated_p < 0.35 else "ORTA"
+        verdict = "SAT/KACIN"
+        confidence = "YUKSEK" if updated_p < 0.35 else "ORTA"
     else:
         verdict = "BEKLE"
-        confidence = "DÜŞÜK"
+        confidence = "DUSUK"
 
     # 8. Gemini AI commentary
     ai_comment = _gemini_analyze(symbol, data, final_ev, kelly, bayes)
