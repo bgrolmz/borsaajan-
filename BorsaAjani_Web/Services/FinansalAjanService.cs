@@ -122,4 +122,71 @@ public class FinansalAjanService
             return false;
         }
     }
+
+    // ────────────────────────────────────────────────────────────
+    // WATCHLIST
+    // ────────────────────────────────────────────────────────────
+
+    public async Task<List<WatchlistItem>?> GetWatchlistAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await Client.GetAsync("/hermes/watchlist", ct);
+            if (!resp.IsSuccessStatusCode) return new List<WatchlistItem>();
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("watchlist", out var arr)) return new List<WatchlistItem>();
+            var items = new List<WatchlistItem>();
+            foreach (var el in arr.EnumerateArray())
+            {
+                items.Add(new WatchlistItem
+                {
+                    Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() : null,
+                    Mode = el.TryGetProperty("mode", out var m) ? m.GetString() : "STOCK",
+                    AddedAt = el.TryGetProperty("added_at", out var a) ? a.GetString() : null,
+                });
+            }
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetWatchlist exception");
+            return null;
+        }
+    }
+
+    public async Task<bool> AddWatchlistAsync(string symbol, string mode = "STOCK", CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await Client.PostAsync($"/hermes/watchlist/add?symbol={Uri.EscapeDataString(symbol)}&mode={mode}", null, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AddWatchlist exception");
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveWatchlistAsync(string symbol, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await Client.DeleteAsync($"/watchlist/{Uri.EscapeDataString(symbol)}", ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RemoveWatchlist exception");
+            return false;
+        }
+    }
+}
+
+public class WatchlistItem
+{
+    public string? Symbol { get; set; }
+    public string? Mode { get; set; }
+    public string? AddedAt { get; set; }
 }
