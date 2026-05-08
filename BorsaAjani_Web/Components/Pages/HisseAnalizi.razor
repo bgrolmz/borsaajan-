@@ -174,6 +174,103 @@
                 </span>
             </div>
 
+            @* ── Analist Konsensüsü (Midas tarzı bar) ── *@
+            @if (result.AnalystCount.HasValue && result.AnalystCount.Value > 0)
+            {
+                @* recommendationMean: 1=Strong Buy, 2=Buy, 3=Hold, 4=Sell, 5=Strong Sell *@
+                var mean = result.AnalystMean ?? 3.0;
+                var buyPct = Math.Max(0, Math.Min(100, (int)((3.0 - Math.Min(mean, 3.0)) / 2.0 * 100)));
+                var sellPct = Math.Max(0, Math.Min(100, (int)((Math.Max(mean, 3.0) - 3.0) / 2.0 * 100)));
+                var holdPct = Math.Max(0, 100 - buyPct - sellPct);
+                <div class="sk-card" style="margin-bottom:14px;">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Analist Konsensüsü</span>
+                        <span class="sk-h-meta">@result.AnalystCount.Value analist · ortalama @mean.ToString("F2")</span>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px; padding:6px 0;">
+                        <div class="sk-row-between">
+                            <span class="sk-tag" style="color:var(--wf-buy);">AL</span>
+                            <div class="sk-row" style="gap:8px; flex:1; margin-left:12px;">
+                                <div class="bar-track" style="flex:1;"><div class="bar-fill buy" style="width:@(buyPct)%;"></div></div>
+                                <span class="sk-num sk-num-sm" style="color:var(--wf-buy); min-width:42px; text-align:right;">%@buyPct</span>
+                            </div>
+                        </div>
+                        <div class="sk-row-between">
+                            <span class="sk-tag">TUT</span>
+                            <div class="sk-row" style="gap:8px; flex:1; margin-left:12px;">
+                                <div class="bar-track" style="flex:1;"><div class="bar-fill hold" style="width:@(holdPct)%;"></div></div>
+                                <span class="sk-num sk-num-sm" style="min-width:42px; text-align:right;">%@holdPct</span>
+                            </div>
+                        </div>
+                        <div class="sk-row-between">
+                            <span class="sk-tag" style="color:var(--wf-sell);">SAT</span>
+                            <div class="sk-row" style="gap:8px; flex:1; margin-left:12px;">
+                                <div class="bar-track" style="flex:1;"><div class="bar-fill sell" style="width:@(sellPct)%;"></div></div>
+                                <span class="sk-num sk-num-sm" style="color:var(--wf-sell); min-width:42px; text-align:right;">%@sellPct</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* ── Boğa & Ayı Analizi (Midas tarzı) ── *@
+            @if (result.BullBear != null && (result.BullBear.BullThesis?.Any() == true || result.BullBear.BearThesis?.Any() == true))
+            {
+                <div class="sk-card" style="margin-bottom:14px;">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Boğa & Ayı Analizi</span>
+                        <div style="display:flex; gap:6px;">
+                            <button @onclick="@(() => bullBearTab = "bull")" class="wf-btn xs @(bullBearTab == "bull" ? "primary" : "")">🐂 Boğa</button>
+                            <button @onclick="@(() => bullBearTab = "bear")" class="wf-btn xs @(bullBearTab == "bear" ? "danger" : "")">🐻 Ayı</button>
+                        </div>
+                    </div>
+                    @if (bullBearTab == "bull" && result.BullBear.BullThesis != null)
+                    {
+                        <div style="display:flex; flex-direction:column; gap:10px; padding:6px 0;">
+                            @foreach (var item in result.BullBear.BullThesis)
+                            {
+                                <div style="display:flex; gap:10px; align-items:flex-start;">
+                                    <span style="color:var(--wf-buy); font-family:var(--f-mono); font-size:14px; flex-shrink:0; margin-top:1px;">▲</span>
+                                    <span style="font-family:var(--f-hand); font-size:14px; color:var(--wf-ink); line-height:1.5;">@item</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (bullBearTab == "bear" && result.BullBear.BearThesis != null)
+                    {
+                        <div style="display:flex; flex-direction:column; gap:10px; padding:6px 0;">
+                            @foreach (var item in result.BullBear.BearThesis)
+                            {
+                                <div style="display:flex; gap:10px; align-items:flex-start;">
+                                    <span style="color:var(--wf-sell); font-family:var(--f-mono); font-size:14px; flex-shrink:0; margin-top:1px;">▼</span>
+                                    <span style="font-family:var(--f-hand); font-size:14px; color:var(--wf-ink); line-height:1.5;">@item</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(result.BullBear.Balance))
+                    {
+                        <div class="sk-divider"></div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span class="sk-tag">⚖ Denge</span>
+                            <span style="font-family:var(--f-hand); font-size:13px; color:var(--wf-ink-dim); line-height:1.4;">@result.BullBear.Balance</span>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ── Detaylı AI Yorumu — geniş alan ── *@
+            @if (!string.IsNullOrWhiteSpace(result.AiCommentary))
+            {
+                <div class="sk-card" style="margin-bottom:14px; border-left:3px solid var(--wf-acc);">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">📋 Detaylı Mentor Yorumu</span>
+                        <span class="sk-h-meta">Gemini AI · Türkçe</span>
+                    </div>
+                    <div style="font-family:var(--f-hand); font-size:14px; color:var(--wf-ink); line-height:1.65; white-space:pre-wrap;">@result.AiCommentary</div>
+                </div>
+            }
+
             @* ── EV / Kelly / Bayes — 3 kart ── *@
             <div class="sk-grid-3" style="margin-bottom:14px;">
 
@@ -270,14 +367,46 @@
             @* ── Haberler + Teknik Sinyaller ── *@
             <div class="sk-grid-2" style="margin-bottom:14px;">
 
-                @* Haberler *@
+                @* Haberler — TR yorumlu + sentiment rozetli *@
                 <div class="sk-card">
                     <div class="sk-card-h">
                         <span class="sk-h-title">Haber & Olay Akışı</span>
-                        <span class="sk-h-meta">Bayes güncellemesinde kullanıldı</span>
+                        <span class="sk-h-meta">Türkçe yorum · sentiment</span>
                     </div>
-                    @if (result.RecentNews != null && result.RecentNews.Any())
+                    @if (result.NewsEnriched != null && result.NewsEnriched.Any())
                     {
+                        <div style="display:flex; flex-direction:column; gap:0;">
+                            @{ int nidx = 0; }
+                            @foreach (var item in result.NewsEnriched.Take(6))
+                            {
+                                var sentClass = (item.Sentiment ?? "nötr") switch {
+                                    "pozitif" => "buy",
+                                    "negatif" => "sell",
+                                    _ => "hold"
+                                };
+                                var sentLabel = (item.Sentiment ?? "nötr") switch {
+                                    "pozitif" => "POZİTİF",
+                                    "negatif" => "NEGATİF",
+                                    _ => "NÖTR"
+                                };
+                                <div style="display:flex; flex-direction:column; gap:4px; padding:8px 0; border-top:@(nidx>0 ? "1px dashed var(--wf-border)" : "none");">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <span class="v-badge @sentClass" style="font-size:10px;">@(item.ImpactEmoji ?? "●") @sentLabel</span>
+                                        <span style="font-family:var(--f-mono); font-size:9px; color:var(--wf-ink-mute);">HABER #@(nidx+1)</span>
+                                    </div>
+                                    <span style="font-family:var(--f-hand); font-size:13px; color:var(--wf-ink); line-height:1.45;">@item.SummaryTr</span>
+                                    @if (!string.IsNullOrWhiteSpace(item.Title) && item.Title != item.SummaryTr)
+                                    {
+                                        <span style="font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); line-height:1.3;">orijinal: @item.Title</span>
+                                    }
+                                </div>
+                                nidx++;
+                            }
+                        </div>
+                    }
+                    else if (result.RecentNews != null && result.RecentNews.Any())
+                    {
+                        @* Fallback — eski format *@
                         <div style="display:flex; flex-direction:column; gap:0;">
                             @foreach (var news in result.RecentNews.Take(5))
                             {
@@ -481,6 +610,7 @@
     private double stopPct = 7.0;
     private double? priorProb;
     private bool showAdvanced = false;
+    private string bullBearTab = "bull";
 
     private bool isLoading = false;
     private string? errorMsg;

@@ -16,6 +16,8 @@ public class FinansalAnalizYaniti
     [JsonPropertyName("change_pct")] public double? ChangePct { get; set; }
     [JsonPropertyName("analyst_target")] public double? AnalystTarget { get; set; }
     [JsonPropertyName("analyst_recommendation")] public string? AnalystRecommendation { get; set; }
+    [JsonPropertyName("analyst_count")] public int? AnalystCount { get; set; }
+    [JsonPropertyName("analyst_mean")] public double? AnalystMean { get; set; }
 
     [JsonPropertyName("targets")] public AnalizTargets? Targets { get; set; }
     [JsonPropertyName("probability")] public AnalizProbability? Probability { get; set; }
@@ -28,6 +30,8 @@ public class FinansalAnalizYaniti
 
     [JsonPropertyName("fundamentals")] public AnalizFundamentals? Fundamentals { get; set; }
     [JsonPropertyName("recent_news")] public List<string>? RecentNews { get; set; }
+    [JsonPropertyName("news_enriched")] public List<HaberZenginlestirilmis>? NewsEnriched { get; set; }
+    [JsonPropertyName("bull_bear")] public BogaAyiAnalizi? BullBear { get; set; }
     [JsonPropertyName("ai_commentary")] public string? AiCommentary { get; set; }
     [JsonPropertyName("analyzed_at")] public string? AnalyzedAt { get; set; }
     [JsonPropertyName("error")] public string? Error { get; set; }
@@ -83,6 +87,22 @@ public class AnalizNews
     [JsonPropertyName("publisher")] public string? Publisher { get; set; }
     [JsonPropertyName("link")] public string? Link { get; set; }
     [JsonPropertyName("published")] public string? Published { get; set; }
+}
+
+public class HaberZenginlestirilmis
+{
+    [JsonPropertyName("title")] public string? Title { get; set; }
+    [JsonPropertyName("summary_tr")] public string? SummaryTr { get; set; }
+    [JsonPropertyName("sentiment")] public string? Sentiment { get; set; }
+    [JsonPropertyName("impact_emoji")] public string? ImpactEmoji { get; set; }
+}
+
+public class BogaAyiAnalizi
+{
+    [JsonPropertyName("bull_thesis")] public List<string>? BullThesis { get; set; }
+    [JsonPropertyName("bear_thesis")] public List<string>? BearThesis { get; set; }
+    [JsonPropertyName("balance")] public string? Balance { get; set; }
+    [JsonPropertyName("fallback")] public bool Fallback { get; set; }
 }
 
 // ============================================================================

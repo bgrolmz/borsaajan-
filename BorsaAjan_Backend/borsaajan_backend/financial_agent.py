@@ -15,9 +15,149 @@ import os
 import logging
 import yfinance as yf
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
+
+
+def _enrich_news_tr(news_titles: List[str], symbol: str) -> List[Dict]:
+    """
+    Enrich news titles with Turkish summary + sentiment via single Gemini call.
+
+    Returns list of dicts: {title, summary_tr, sentiment, impact_emoji}
+    Falls back to keyword heuristic on Gemini failure.
+    """
+    if not news_titles:
+        return []
+
+    # Heuristic fallback (no LLM call)
+    def _heuristic(titles):
+        bullish = {"surge", "beat", "beats", "record", "growth", "upgrade", "strong", "buy", "positive", "profit", "rally", "soars", "jumps", "gains", "raises", "tops"}
+        bearish = {"miss", "drop", "fall", "downgrade", "sell", "risk", "loss", "warning", "fraud", "cut", "weak", "plunges", "tumbles", "slides", "concerns"}
+        out = []
+        for t in titles:
+            tl = t.lower()
+            bull = sum(1 for w in bullish if w in tl)
+            bear = sum(1 for w in bearish if w in tl)
+            if bull > bear:
+                sentiment, emoji = "pozitif", "▲"
+            elif bear > bull:
+                sentiment, emoji = "negatif", "▼"
+            else:
+                sentiment, emoji = "nötr", "●"
+            out.append({"title": t, "summary_tr": t, "sentiment": sentiment, "impact_emoji": emoji})
+        return out
+
+    try:
+        from .logic import safe_gemini_call, GeminiCallError
+        items_str = "\n".join(f"{i+1}. {t}" for i, t in enumerate(news_titles[:8]))
+        prompt = (
+            f"{symbol} hissesi için aşağıdaki {len(news_titles[:8])} haber başlığını analiz et.\n"
+            "Her haber için Türkçe özet (max 80 karakter) ve sentiment (pozitif/negatif/nötr) ver.\n\n"
+            f"HABERLER:\n{items_str}\n\n"
+            "Çıktı: SADECE JSON dizisi, sıra korunsun.\n"
+            "Format: [{\"summary_tr\": \"...\", \"sentiment\": \"pozitif|negatif|nötr\"}, ...]"
+        )
+        result = safe_gemini_call(
+            prompt=prompt,
+            response_mode="json",
+            schema=None,
+            max_retries=0,
+            temperature=0.3,
+            max_output_tokens=1024,
+            purpose="news_tr_enrich",
+            symbol=symbol,
+        )
+        if not isinstance(result, list):
+            raise ValueError("not a list")
+
+        emoji_map = {"pozitif": "▲", "negatif": "▼", "nötr": "●", "notr": "●"}
+        enriched = []
+        for i, t in enumerate(news_titles[:8]):
+            if i < len(result) and isinstance(result[i], dict):
+                summary = (result[i].get("summary_tr") or t)[:200]
+                sent = (result[i].get("sentiment") or "nötr").lower().replace("ö", "o")
+                sent_canonical = "pozitif" if "poz" in sent else ("negatif" if "neg" in sent else "nötr")
+                enriched.append({
+                    "title": t,
+                    "summary_tr": summary,
+                    "sentiment": sent_canonical,
+                    "impact_emoji": emoji_map.get(sent_canonical, "●"),
+                })
+            else:
+                enriched.append({"title": t, "summary_tr": t, "sentiment": "nötr", "impact_emoji": "●"})
+        return enriched
+    except Exception as e:
+        logger.warning(f"_enrich_news_tr fallback: {e}")
+        return _heuristic(news_titles[:8])
+
+
+def _bull_bear_analysis(symbol: str, data: dict, ev: dict, kelly: dict, p_win: float) -> dict:
+    """
+    Generate Bull (boğa) and Bear (ayı) thesis via Gemini in Turkish.
+    Single LLM call returns both perspectives + balance verdict.
+    """
+    fallback = {
+        "bull_thesis": [
+            f"{symbol} için pozitif senaryo: olasılık {round(p_win*100)}%, hedef ulaşılırsa ROI %{round(ev.get('roi_pct', 0), 1)}.",
+            "Eğer temel göstergeler iyileşir ve haber akışı pozitif kalırsa pozisyon büyütülebilir.",
+            "Kelly oranı önerilen: %{0:.1f} — disiplinli giriş için referans.".format(kelly.get('quarter_kelly_pct', 0)),
+        ],
+        "bear_thesis": [
+            f"{symbol} için risk: olasılığın gerçeklemesi yüzde {round((1-p_win)*100)} oranla düşebilir.",
+            "Stop-loss seviyesi altına inilirse zarar büyür; pozisyon küçük tutulmalı.",
+            "Fundamentals ve makro koşullar ters dönerse senaryo bozulur.",
+        ],
+        "balance": "Olasılık nötr — bekle ve veri gözle." if 0.45 <= p_win <= 0.55 else ("Boğa lehine ağır basıyor." if p_win > 0.55 else "Ayı lehine ağır basıyor."),
+        "fallback": True,
+    }
+
+    try:
+        from .logic import safe_gemini_call
+        prompt = (
+            f"Sen kuantitatif yatırım analistisin. {symbol} hissesi için Boğa (bullish) ve Ayı (bearish) tezlerini Türkçe yaz.\n\n"
+            f"VERİLER:\n"
+            f"- Fiyat: ${data.get('price')}\n"
+            f"- Sektör: {data.get('sector')}\n"
+            f"- F/K: {data.get('pe_ratio')}\n"
+            f"- Gelir büyüme: %{data.get('revenue_growth')}\n"
+            f"- Brüt marj: %{data.get('gross_margins')}\n"
+            f"- Borç/Özkaynak: {data.get('debt_to_equity')}\n"
+            f"- Analist tavsiye: {data.get('analyst_recommendation')}\n"
+            f"- Kazanma olasılığı: %{round(p_win*100)}\n"
+            f"- ROI: %{round(ev.get('roi_pct', 0), 1)}\n"
+            f"- Önerilen Kelly: %{kelly.get('quarter_kelly_pct', 0):.1f}\n\n"
+            "Boğa: 3 madde, neden hisse yükselebilir. Her madde 1-2 cümle, somut.\n"
+            "Ayı: 3 madde, neden hisse düşebilir. Her madde 1-2 cümle, somut.\n"
+            "Denge: 1 cümle özet — hangi taraf ağır basıyor ve neden.\n\n"
+            "JSON döndür: {\"bull_thesis\": [\"...\", \"...\", \"...\"], \"bear_thesis\": [\"...\", \"...\", \"...\"], \"balance\": \"...\"}"
+        )
+        schema = {
+            "type": "object",
+            "properties": {
+                "bull_thesis": {"type": "array", "items": {"type": "string"}},
+                "bear_thesis": {"type": "array", "items": {"type": "string"}},
+                "balance": {"type": "string"},
+            },
+            "required": ["bull_thesis", "bear_thesis", "balance"],
+        }
+        result = safe_gemini_call(
+            prompt=prompt,
+            response_mode="json",
+            schema=schema,
+            max_retries=0,
+            temperature=0.5,
+            max_output_tokens=1536,
+            purpose="bull_bear",
+            symbol=symbol,
+        )
+        if result and result.get("bull_thesis") and result.get("bear_thesis"):
+            result["fallback"] = False
+            return result
+    except Exception as e:
+        logger.warning(f"_bull_bear_analysis fallback: {e}")
+    return fallback
+
 
 # ============================================================================
 # PRICE & FUNDAMENTALS
@@ -46,6 +186,8 @@ def get_stock_data(symbol: str) -> dict:
         fifty_two_week_low = info.get("fiftyTwoWeekLow")
         analyst_target = info.get("targetMeanPrice")
         recommendation = info.get("recommendationKey", "none")
+        analyst_count = info.get("numberOfAnalystOpinions") or 0
+        recommendation_mean = info.get("recommendationMean")  # 1=strong buy, 5=strong sell
         sector = info.get("sector", "Unknown")
         short_name = info.get("shortName", symbol)
 
@@ -78,6 +220,8 @@ def get_stock_data(symbol: str) -> dict:
             "52w_low": fifty_two_week_low,
             "analyst_target": round(float(analyst_target), 2) if analyst_target else None,
             "analyst_recommendation": recommendation,
+            "analyst_count": analyst_count,
+            "analyst_mean": recommendation_mean,
             "recent_news": news_items,
             "fetched_at": datetime.utcnow().isoformat(),
         }
@@ -410,6 +554,8 @@ def analyze_ticker(
         "change_pct": data.get("change_pct"),
         "analyst_target": data.get("analyst_target"),
         "analyst_recommendation": data.get("analyst_recommendation"),
+        "analyst_count": data.get("analyst_count"),
+        "analyst_mean": data.get("analyst_mean"),
 
         "targets": {
             "entry": price,
@@ -455,6 +601,8 @@ def analyze_ticker(
         },
 
         "recent_news": data.get("recent_news", []),
+        "news_enriched": _enrich_news_tr(data.get("recent_news", []), symbol),
+        "bull_bear": _bull_bear_analysis(symbol, data, final_ev, kelly, updated_p),
         "ai_commentary": ai_comment,
         "analyzed_at": datetime.utcnow().isoformat(),
     }

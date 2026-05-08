@@ -1321,6 +1321,67 @@ def chat_with_user(request: ChatRequest):
         if ctx_type == "crypto":
             mode = "CRYPTO"
 
+        # ========== GENERAL CHAT PATH (no symbol context) ==========
+        # If user has a real question but no symbol, call Gemini directly
+        # for a generic mentor response instead of returning the canned HOLD fallback.
+        if not symbol and user_msg and len(user_msg.strip()) >= 3:
+            try:
+                from .logic import safe_gemini_call, GeminiCallError
+                print(f"🔍 [CHAT GENERIC] No symbol — calling Gemini directly for: '{user_msg[:80]}'")
+                generic_prompt = (
+                    "Sen Borsa Ajanı uygulamasının kuantitatif yatırım mentörüsün. "
+                    "Kullanıcının sorusunu Türkçe, kısa (3-5 cümle), net ve eyleme dönük yanıtla. "
+                    "Finans/borsa/kripto/yatırım/strateji/risk konularında uzmanlaş. "
+                    "Belirsizlik varsa açıkça söyle. Yatırım tavsiyesi yerine bilgi/eğitim ver.\n\n"
+                    f"Kullanıcı sorusu: {user_msg}\n\n"
+                    "JSON döndür: {\"answer\": \"...\", \"topic\": \"finans|teknik|risk|genel\"}"
+                )
+                schema = {
+                    "type": "object",
+                    "properties": {
+                        "answer": {"type": "string"},
+                        "topic": {"type": "string"},
+                    },
+                    "required": ["answer"],
+                }
+                gen_result = safe_gemini_call(
+                    generic_prompt,
+                    response_mode="json",
+                    schema=schema,
+                    max_retries=1,
+                    purpose="chat_generic",
+                    temperature=0.6,
+                    max_output_tokens=1024,
+                )
+                if gen_result and gen_result.get("answer"):
+                    answer_text = gen_result.get("answer").strip()
+                    print(f"✅ [CHAT GENERIC] Gemini answered ({len(answer_text)} chars)")
+                    return {
+                        "success": True,
+                        "decision": "INFO",
+                        "why_bullets": [],
+                        "action_plan": [],
+                        "news_impact": [],
+                        "glossary_terms": {},
+                        "mentor_scenario": "",
+                        "risk_note": "",
+                        "confidence": 0,
+                        "horizon_days": 0,
+                        "symbol": "GENERAL",
+                        "mode": "chat",
+                        "errors": [],
+                        "missing": [],
+                        "flags": {"used_llm": True, "missing_data": False, "fallback_mode": False, "generic_chat": True},
+                        "cache_key": None,
+                        "response": answer_text,
+                        "mentor": {"answer": answer_text, "topic": gen_result.get("topic", "genel")},
+                    }
+            except GeminiCallError as e:
+                print(f"⚠️ [CHAT GENERIC] Gemini error: {e} — falling through to canonical path")
+            except Exception as e:
+                print(f"⚠️ [CHAT GENERIC] Unexpected error: {e} — falling through")
+        # ============================================================
+
         # ========== DIAGNOSTIC LOGGING ==========
         print(f"🔍 [CHAT HYBRID] context_type: '{ctx_type}', symbol: '{symbol}', mode: '{mode}'")
         # =========================================
