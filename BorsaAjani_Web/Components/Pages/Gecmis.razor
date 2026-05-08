@@ -1,0 +1,147 @@
+@page "/gecmis"
+@rendermode InteractiveServer
+@using BorsaAjani_Web.Services
+@inject FinansalAjanService Ajan
+@inject NavigationManager Nav
+
+<PageTitle>Geçmiş Analizler — Borsa Ajanı</PageTitle>
+
+<div class="ha-shell">
+
+    <nav class="ha-sidebar">
+        <a href="/" class="ha-sb-logo" title="Ana Sayfa">B</a>
+        <a href="/hisse-analizi" class="ha-sb-icon" title="Analiz">◎</a>
+        <a href="/watchlist" class="ha-sb-icon" title="Watchlist">☆</a>
+        <a href="/paper-trading" class="ha-sb-icon" title="Paper Trading">▣</a>
+        <a href="/gecmis" class="ha-sb-icon active" title="Geçmiş">⌛</a>
+        <div style="flex:1"></div>
+        <a href="/" class="ha-sb-icon" title="Ana Sayfa">⌂</a>
+    </nav>
+
+    <main class="ha-main">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+            <div>
+                <h1 style="font-family:var(--f-hand); font-size:28px; color:var(--wf-ink); margin:0;">⌛ Geçmiş Analizler</h1>
+                <span class="sk-tag" style="display:block; margin-top:4px;">Tüm AI analiz çıktıları — outcome tracking için</span>
+            </div>
+            <button @onclick="Load" disabled="@isLoading" class="wf-btn sm">
+                @(isLoading ? "Yükleniyor…" : "↻ Yenile")
+            </button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div style="text-align:center; padding:60px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
+                <div style="font-size:22px;">⏳</div>
+                <div>Yükleniyor…</div>
+            </div>
+        }
+        else if (items == null || !items.Any())
+        {
+            <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
+                <div style="font-size:38px; opacity:0.3;">⌛</div>
+                <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim); margin-top:8px;">Henüz analiz yok</div>
+                <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); margin-top:6px;">
+                    Hisse Analizi sayfasından bir sembol analiz et — burada birikecek
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="sk-card">
+                <div class="sk-card-h">
+                    <span class="sk-h-title">Analiz Kayıtları</span>
+                    <span class="sk-h-meta">@items.Count adet</span>
+                </div>
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--wf-border);">
+                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
+                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tür</th>
+                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Özet</th>
+                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Risk</th>
+                            <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat</th>
+                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tarih</th>
+                            <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in items)
+                        {
+                            var riskCls = (h.RiskLevel?.ToUpper()) switch
+                            {
+                                "LOW" or "DÜŞÜK" => "buy",
+                                "HIGH" or "YÜKSEK" => "sell",
+                                _ => "hold"
+                            };
+                            <tr style="border-bottom:1px dashed var(--wf-border);">
+                                <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@h.Symbol</td>
+                                <td style="padding:10px 4px;">
+                                    <span class="v-badge @(h.Mode == "CRYPTO" ? "hold" : "buy")" style="font-size:10px;">
+                                        @(h.Mode == "CRYPTO" ? "KRİPTO" : "HİSSE")
+                                    </span>
+                                </td>
+                                <td style="padding:10px 4px; font-family:var(--f-hand); font-size:12px; color:var(--wf-ink-dim); max-width:340px;">
+                                    @(string.IsNullOrEmpty(h.Summary) ? "—" : (h.Summary.Length > 120 ? h.Summary.Substring(0, 120) + "…" : h.Summary))
+                                </td>
+                                <td style="padding:10px 4px;">
+                                    <span class="v-badge @riskCls" style="font-size:10px;">@(h.RiskLevel ?? "—")</span>
+                                </td>
+                                <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">
+                                    @(h.PriceAtAnalysis.HasValue ? $"${h.PriceAtAnalysis.Value:F2}" : "—")
+                                </td>
+                                <td style="padding:10px 4px; font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">
+                                    @(string.IsNullOrEmpty(h.CreatedAt) ? "—" : h.CreatedAt.Substring(0, Math.Min(16, h.CreatedAt.Length)).Replace("T", " "))
+                                </td>
+                                <td style="padding:10px 4px; text-align:right;">
+                                    <a href="/hisse-analizi/@h.Symbol" class="wf-btn xs">▶</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </main>
+
+    <aside class="ha-mentor-col">
+        <div class="mentor-card">
+            <div class="mentor-head">
+                <div class="mentor-avatar">M</div>
+                <div>
+                    <div style="font-family:var(--f-hand); font-size:14px; color:var(--wf-ink); font-weight:600;">Mentor · Doğa</div>
+                    <span class="sk-tag" style="font-size:9px;">GEÇMİŞ AKLI</span>
+                </div>
+            </div>
+            <div class="mentor-bubble">
+                Geçmiş analizler <strong>outcome tracking</strong> için kritik. AI tahminlerini sonuçla karşılaştır → Bayesian posterior güncelle.
+            </div>
+            <div class="mentor-bubble">
+                <strong>İpucu:</strong> Aynı sembolü farklı tarihlerde analiz et — AI'nın tutarlılığını gör.
+            </div>
+        </div>
+    </aside>
+</div>
+
+@code {
+    private List<HistoryItem>? items;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        isLoading = true;
+        try
+        {
+            items = await Ajan.GetHistoryAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

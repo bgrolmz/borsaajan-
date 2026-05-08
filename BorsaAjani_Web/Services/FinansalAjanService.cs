@@ -182,6 +182,42 @@ public class FinansalAjanService
             return false;
         }
     }
+
+    // ────────────────────────────────────────────────────────────
+    // ANALYSIS HISTORY
+    // ────────────────────────────────────────────────────────────
+
+    public async Task<List<HistoryItem>?> GetHistoryAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await Client.GetAsync("/history/all", ct);
+            if (!resp.IsSuccessStatusCode) return new List<HistoryItem>();
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("history", out var arr)) return new List<HistoryItem>();
+            var items = new List<HistoryItem>();
+            foreach (var el in arr.EnumerateArray())
+            {
+                items.Add(new HistoryItem
+                {
+                    Id = el.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt64() : 0,
+                    Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() : null,
+                    Mode = el.TryGetProperty("mode", out var m) ? m.GetString() : null,
+                    Summary = el.TryGetProperty("summary", out var sm) ? sm.GetString() : null,
+                    RiskLevel = el.TryGetProperty("risk_level", out var r) ? r.GetString() : null,
+                    PriceAtAnalysis = el.TryGetProperty("price_at_analysis", out var p) && p.ValueKind == JsonValueKind.Number ? p.GetDouble() : (double?)null,
+                    CreatedAt = el.TryGetProperty("created_at", out var c) ? c.GetString() : null,
+                });
+            }
+            return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetHistory exception");
+            return null;
+        }
+    }
 }
 
 public class WatchlistItem
@@ -190,3 +226,15 @@ public class WatchlistItem
     public string? Mode { get; set; }
     public string? AddedAt { get; set; }
 }
+
+public class HistoryItem
+{
+    public long Id { get; set; }
+    public string? Symbol { get; set; }
+    public string? Mode { get; set; }
+    public string? Summary { get; set; }
+    public string? RiskLevel { get; set; }
+    public double? PriceAtAnalysis { get; set; }
+    public string? CreatedAt { get; set; }
+}
+

@@ -17,6 +17,7 @@
         <a href="/hisse-analizi" class="ha-sb-icon active" title="Analiz">◎</a>
         <a href="/watchlist"      class="ha-sb-icon"        title="Watchlist">☆</a>
         <a href="/paper-trading"  class="ha-sb-icon"        title="Paper Trading">▣</a>
+        <a href="/gecmis"         class="ha-sb-icon"        title="Geçmiş">⌛</a>
         <div style="flex:1"></div>
         <a href="/" class="ha-sb-icon" title="Ana Sayfa">⌂</a>
     </nav>
@@ -155,6 +156,9 @@
                                 Kelly öneri: @result.Kelly.Shares hisse
                             </button>
                         }
+                        <button @onclick="AddToWatchlist" disabled="@isAddingWatch" class="wf-btn sm" title="Watchlist'e ekle">
+                            @(isAddingWatch ? "…" : "☆ Watchlist")
+                        </button>
                     </div>
                     @if (!string.IsNullOrEmpty(tradeMsg))
                     {
@@ -621,6 +625,7 @@
     private bool isTrading = false;
     private string? tradeMsg;
     private bool tradeSuccess;
+    private bool isAddingWatch = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -716,6 +721,25 @@
         if (r.Success) await RefreshPortfolio();
         isTrading = false;
         StateHasChanged();
+    }
+
+    private async Task AddToWatchlist()
+    {
+        if (result?.Symbol == null) return;
+        isAddingWatch = true;
+        StateHasChanged();
+        try
+        {
+            var mode = result.Symbol.Contains("-USD", StringComparison.OrdinalIgnoreCase) ? "CRYPTO" : "STOCK";
+            var ok = await Ajan.AddWatchlistAsync(result.Symbol, mode);
+            tradeSuccess = ok;
+            tradeMsg = ok ? $"⭐ {result.Symbol} watchlist'e eklendi" : $"❌ {result.Symbol} eklenemedi";
+        }
+        finally
+        {
+            isAddingWatch = false;
+            StateHasChanged();
+        }
     }
 }
 
