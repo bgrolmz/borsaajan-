@@ -9,277 +9,467 @@
 
 <PageTitle>Hisse Analizi — Borsa Ajanı</PageTitle>
 
-<div class="min-h-screen bg-ot-bg text-ot-accent p-6">
-    <div class="max-w-6xl mx-auto">
+<div class="ha-shell">
 
-        @* ── HEADER ── *@
-        <header class="mb-6 flex items-center justify-between">
-            <div>
-                <h1 class="text-3xl font-bold">Hisse Analizi</h1>
-                <p class="text-ot-muted text-sm mt-1">EV · Kelly · Bayes · Gemini AI yorumu</p>
-            </div>
-            <a href="/" class="text-ot-primary hover:underline text-sm">← Ana Sayfa</a>
-        </header>
+    @* ── Sidebar ── *@
+    <nav class="ha-sidebar">
+        <a href="/" class="ha-sb-logo" title="Ana Sayfa">B</a>
+        <a href="/hisse-analizi" class="ha-sb-icon active" title="Analiz">◎</a>
+        <a href="/"               class="ha-sb-icon"        title="Watchlist">☆</a>
+        <a href="/"               class="ha-sb-icon"        title="Paper Trading">▣</a>
+        <div style="flex:1"></div>
+        <a href="/" class="ha-sb-icon" title="Ana Sayfa">⌂</a>
+    </nav>
 
-        @* ── INPUT PANEL ── *@
-        <div class="bg-ot-card border border-ot-border rounded-xl p-5 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
-                <div class="md:col-span-2">
-                    <label class="block text-xs text-ot-muted mb-1">Sembol</label>
-                    <input @bind="symbolInput" @bind:event="oninput"
-                           @onkeydown="HandleKey"
-                           placeholder="AAPL, TSLA, NVDA..."
-                           class="w-full bg-ot-surface border border-ot-border rounded-lg px-3 py-2 uppercase
-                                  focus:outline-none focus:ring-2 focus:ring-ot-primary" />
-                </div>
-                <div>
-                    <label class="block text-xs text-ot-muted mb-1">Portföy ($)</label>
-                    <input type="number" @bind="portfolioSize"
-                           class="w-full bg-ot-surface border border-ot-border rounded-lg px-3 py-2" />
-                </div>
-                <div>
-                    <label class="block text-xs text-ot-muted mb-1">Hedef %</label>
-                    <input type="number" @bind="upsidePct" step="0.5"
-                           class="w-full bg-ot-surface border border-ot-border rounded-lg px-3 py-2" />
-                </div>
-                <div>
-                    <label class="block text-xs text-ot-muted mb-1">Stop %</label>
-                    <input type="number" @bind="stopPct" step="0.5"
-                           class="w-full bg-ot-surface border border-ot-border rounded-lg px-3 py-2" />
-                </div>
+    @* ── Main content ── *@
+    <main class="ha-main">
+
+        @* ── Search / giriş alanı ── *@
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+            <div class="ha-search">
+                <span style="color:var(--wf-ink-mute);">⌕</span>
+                <input @bind="symbolInput"
+                       @bind:event="oninput"
+                       @onkeydown="HandleKey"
+                       placeholder="Sembol gir — AAPL, NVDA, TSLA…"
+                       class="sk-input"
+                       style="border:none; background:transparent; padding:0; text-transform:uppercase; font-family:var(--f-hand);" />
             </div>
-            <div class="mt-4 flex gap-3">
-                <button @onclick="RunAnalysis" disabled="@isLoading"
-                        class="bg-ot-primary text-ot-bg font-semibold px-5 py-2 rounded-lg
-                               hover:opacity-90 disabled:opacity-50">
-                    @(isLoading ? "Analiz Ediliyor..." : "Analiz Et")
+            <div style="display:flex; gap:6px; align-items:center;">
+                <div>
+                    <span class="sk-tag" style="display:block; margin-bottom:3px;">Portföy $</span>
+                    <input type="number" @bind="portfolioSize" class="sk-input" style="width:90px;" />
+                </div>
+                <div>
+                    <span class="sk-tag" style="display:block; margin-bottom:3px;">Hedef %</span>
+                    <input type="number" @bind="upsidePct" step="0.5" class="sk-input" style="width:70px;" />
+                </div>
+                <div>
+                    <span class="sk-tag" style="display:block; margin-bottom:3px;">Stop %</span>
+                    <input type="number" @bind="stopPct" step="0.5" class="sk-input" style="width:70px;" />
+                </div>
+                <button @onclick="RunAnalysis" disabled="@isLoading" class="wf-btn primary" style="align-self:flex-end; height:34px;">
+                    @(isLoading ? "⏳ Analiz…" : "▶ Analiz Et")
                 </button>
-                <button @onclick="ToggleAdvanced"
-                        class="border border-ot-border px-4 py-2 rounded-lg text-sm hover:bg-ot-surface">
-                    @(showAdvanced ? "Gelişmiş Gizle" : "Gelişmiş")
-                </button>
+                <button @onclick="ToggleAdvanced" class="wf-btn sm" style="align-self:flex-end; height:34px;">⚙</button>
             </div>
-
-            @if (showAdvanced)
-            {
-                <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs text-ot-muted mb-1">Önsel olasılık (boş = otomatik)</label>
-                        <input type="number" @bind="priorProb" step="0.05" min="0" max="1"
-                               class="w-full bg-ot-surface border border-ot-border rounded-lg px-3 py-2" />
-                    </div>
-                </div>
-            }
         </div>
 
-        @* ── ERROR ── *@
+        @if (showAdvanced)
+        {
+            <div class="sk-card dashed" style="margin-bottom:14px; display:flex; align-items:center; gap:10px;">
+                <span class="sk-tag">Önsel olasılık (boş=otomatik)</span>
+                <input type="number" @bind="priorProb" step="0.05" min="0" max="1" class="sk-input" style="width:110px;" />
+            </div>
+        }
+
+        @* ── Hata ── *@
         @if (!string.IsNullOrEmpty(errorMsg))
         {
-            <div class="bg-ot-danger/20 border border-ot-danger text-ot-danger rounded-lg p-4 mb-6">
+            <div class="sk-card" style="border-color:var(--wf-sell); background:var(--wf-sell-soft); margin-bottom:14px; color:var(--wf-sell); font-family:var(--f-hand); font-size:13px;">
                 ⚠️ @errorMsg
             </div>
         }
 
-        @* ── RESULT ── *@
+        @* ── Yükleniyor ── *@
+        @if (isLoading)
+        {
+            <div style="text-align:center; padding:60px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
+                <div style="font-size:22px; margin-bottom:8px;">⏳</div>
+                <div>Analiz ediliyor…</div>
+                <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); margin-top:4px;">EV · Kelly · Bayes · Gemini</div>
+            </div>
+        }
+
+        @* ── Sonuç ── *@
         @if (result != null && result.Success)
         {
-            var verdictColor = (result.Verdict ?? "") == "AL" ? "text-ot-primary"
-                             : (result.Verdict ?? "").StartsWith("SAT") ? "text-ot-danger"
-                             : "text-ot-warning";
+            var verdictClass = (result.Verdict ?? "") switch {
+                var v when v.StartsWith("AL") => "buy",
+                var v when v.StartsWith("SAT") => "sell",
+                _ => "hold"
+            };
             var confidenceTr = (result.Confidence ?? "") switch {
                 "YUKSEK" => "YÜKSEK",
                 "ORTA"   => "ORTA",
                 "DUSUK"  => "DÜŞÜK",
-                _        => result.Confidence ?? "-"
+                _        => result.Confidence ?? "—"
             };
+            var priorPct  = (int)Math.Round((result.Probability?.Initial ?? 0.5) * 100);
+            var posteriorPct = (int)Math.Round((result.Probability?.AfterNews ?? result.Probability?.Initial ?? 0.5) * 100);
+            var bayesDelta = posteriorPct - priorPct;
+            var winPct    = posteriorPct;
+            var losePct   = 100 - winPct;
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-
-                @* — TOP CARD — *@
-                <div class="lg:col-span-3 bg-ot-card border border-ot-border rounded-xl p-5">
-                    <div class="flex flex-wrap items-center justify-between gap-4">
-                        <div>
-                            <div class="text-3xl font-bold">@result.Symbol</div>
-                            <div class="text-ot-muted text-sm">@result.Name • @result.Sector</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-2xl font-bold">$@(result.Price?.ToString("F2"))</div>
-                            <div class="text-sm @(result.ChangePct >= 0 ? "text-ot-primary" : "text-ot-danger")">
-                                @(result.ChangePct >= 0 ? "▲" : "▼") @(result.ChangePct?.ToString("F2"))%
-                            </div>
-                        </div>
-                        <div class="text-center px-6">
-                            <div class="text-xs text-ot-muted mb-1">VERDICT</div>
-                            <div class="text-2xl font-bold @verdictColor">@result.Verdict</div>
-                            <div class="text-xs text-ot-muted">@confidenceTr güven</div>
-                        </div>
-                    </div>
-                </div>
-
-                @* — EV CARD — *@
-                <div class="bg-ot-card border border-ot-border rounded-xl p-5">
-                    <h3 class="text-sm text-ot-muted mb-3">EXPECTED VALUE</h3>
-                    <div class="text-3xl font-bold @((result.Ev?.Value ?? 0) > 0 ? "text-ot-primary" : "text-ot-danger")">
-                        $@(result.Ev?.Value.ToString("F2"))
-                    </div>
-                    <div class="text-sm text-ot-muted mt-1">ROI: @(result.Ev?.RoiPct.ToString("F2"))%</div>
-                    <div class="text-xs mt-2">@(result.Ev?.Verdict)</div>
-                </div>
-
-                @* — KELLY CARD — *@
-                <div class="bg-ot-card border border-ot-border rounded-xl p-5">
-                    <h3 class="text-sm text-ot-muted mb-3">KELLY POZİSYON</h3>
-                    <div class="text-3xl font-bold text-ot-primary">@(result.Kelly?.RecommendedPct.ToString("F1"))%</div>
-                    <div class="text-sm text-ot-muted mt-1">$@(result.Kelly?.DollarAmount.ToString("F0")) · @(result.Kelly?.Shares) hisse</div>
-                    <div class="text-xs mt-2">Quarter-Kelly · 5% cap</div>
-                </div>
-
-                @* — PROBABILITY CARD — *@
-                <div class="bg-ot-card border border-ot-border rounded-xl p-5">
-                    <h3 class="text-sm text-ot-muted mb-3">OLASILIK (BAYES)</h3>
-                    <div class="flex items-baseline gap-2">
-                        <span class="text-xl text-ot-muted line-through">@((result.Probability?.Initial * 100)?.ToString("F1"))%</span>
-                        <span class="text-3xl font-bold text-ot-primary">@((result.Probability?.AfterNews * 100)?.ToString("F1"))%</span>
-                    </div>
-                    <div class="text-sm mt-1 @(result.Probability?.NewsDirection == "BULLISH" ? "text-ot-primary" : "text-ot-danger")">
-                        @result.Probability?.NewsDirection
-                        @if (result.Probability?.BayesChange != null)
-                        {
-                            <span>(@(result.Probability.BayesChange > 0 ? "+" : "")@result.Probability.BayesChange.Value.ToString("F1") puan)</span>
-                        }
-                    </div>
-                </div>
-
-                @* — TARGETS — *@
-                <div class="lg:col-span-3 bg-ot-card border border-ot-border rounded-xl p-5">
-                    <h3 class="text-sm text-ot-muted mb-3">FİYAT HEDEFLERİ</h3>
-                    <div class="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                            <div class="text-xs text-ot-muted">STOP</div>
-                            <div class="text-xl font-bold text-ot-danger">$@(result.Targets?.StopLoss.ToString("F2"))</div>
-                            <div class="text-xs text-ot-danger">-@(result.Targets?.StopPct.ToString("F1"))%</div>
-                        </div>
-                        <div class="border-x border-ot-border">
-                            <div class="text-xs text-ot-muted">GİRİŞ</div>
-                            <div class="text-xl font-bold">$@(result.Targets?.Entry.ToString("F2"))</div>
-                            <div class="text-xs text-ot-muted">şu an</div>
-                        </div>
-                        <div>
-                            <div class="text-xs text-ot-muted">HEDEF</div>
-                            <div class="text-xl font-bold text-ot-primary">$@(result.Targets?.Target.ToString("F2"))</div>
-                            <div class="text-xs text-ot-primary">+@(result.Targets?.UpsidePct.ToString("F1"))%</div>
-                        </div>
-                    </div>
-                </div>
-
-                @* — LONGSHOT WARNING — *@
+            @* ── Frame Header ── *@
+            <div class="ha-frame-header">
+                <span class="ha-ticker-name">@result.Symbol</span>
+                <span class="ha-ticker-sub">@result.Name · @result.Sector</span>
+                <span class="sk-dot-sep">·</span>
+                <span class="ha-price-now">$@(result.Price?.ToString("F2"))</span>
+                <span class="ha-price-delta @(result.ChangePct >= 0 ? "pos" : "neg")">
+                    @(result.ChangePct >= 0 ? "▲" : "▼") @(result.ChangePct?.ToString("F2"))%
+                </span>
+                <div class="wf-grow"></div>
                 @if (result.LongshotWarning)
                 {
-                    <div class="lg:col-span-3 bg-ot-warning/10 border border-ot-warning rounded-xl p-4">
-                        <strong class="text-ot-warning">⚠️ Longshot Uyarısı:</strong> Olasilık %15 altında — sistematik overpriced riski var. Geç.
-                    </div>
+                    <span class="v-badge hold">⚠ Longshot Riski</span>
                 }
+                <span class="pt-pill" @onclick="() => tradeShares = result.Kelly?.Shares ?? 1">Paper Trade</span>
+            </div>
 
-                @* — AI COMMENTARY — *@
-                @if (!string.IsNullOrEmpty(result.AiCommentary))
-                {
-                    <div class="lg:col-span-3 bg-ot-card border border-ot-border rounded-xl p-5">
-                        <h3 class="text-sm text-ot-muted mb-3">🤖 GEMINI YORUMU</h3>
-                        <div class="text-sm whitespace-pre-wrap">@result.AiCommentary</div>
+            @* ── Verdict Hero + Mentor Özeti ── *@
+            <div class="sk-grid-2" style="margin-bottom:14px;">
+                <div class="verdict @verdictClass">
+                    <div class="verdict-body">
+                        <div class="verdict-tag">Karar · @result.AnalyzedAt?.Split('T')[1]?.Substring(0,5) güncellendi</div>
+                        <div class="verdict-call">@result.Verdict</div>
+                        <div class="verdict-conf">güven @confidenceTr · Bayes %@posteriorPct</div>
                     </div>
-                }
-
-                @* — FUNDAMENTALS — *@
-                @if (result.Fundamentals != null)
-                {
-                    <div class="lg:col-span-3 bg-ot-card border border-ot-border rounded-xl p-5">
-                        <h3 class="text-sm text-ot-muted mb-3">TEMEL VERİLER</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                            @FundCell("P/E", result.Fundamentals.PeRatio?.ToString("F2"))
-                            @FundCell("EPS", result.Fundamentals.Eps != null ? $"${result.Fundamentals.Eps:F2}" : null)
-                            @FundCell("Gelir Büyüme", result.Fundamentals.RevenueGrowth != null ? $"{result.Fundamentals.RevenueGrowth:F1}%" : null)
-                            @FundCell("Brüt Marj", result.Fundamentals.GrossMargins != null ? $"{result.Fundamentals.GrossMargins:F1}%" : null)
-                            @FundCell("D/E", result.Fundamentals.DebtToEquity?.ToString("F2"))
-                            @FundCell("52w Yüksek", result.Fundamentals.FiftyTwoWeekHigh != null ? $"${result.Fundamentals.FiftyTwoWeekHigh:F2}" : null)
-                            @FundCell("52w Düşük", result.Fundamentals.FiftyTwoWeekLow != null ? $"${result.Fundamentals.FiftyTwoWeekLow:F2}" : null)
-                            @FundCell("Analist Hedefi", result.AnalystTarget != null ? $"${result.AnalystTarget:F2}" : null)
-                        </div>
+                </div>
+                <div class="sk-card" style="display:flex; flex-direction:column; gap:10px;">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Mentor Özeti</span>
+                        <span class="sk-h-meta">Gemini AI</span>
                     </div>
-                }
-
-                @* — RECENT NEWS — *@
-                @if (result.RecentNews != null && result.RecentNews.Any())
-                {
-                    <div class="lg:col-span-3 bg-ot-card border border-ot-border rounded-xl p-5">
-                        <h3 class="text-sm text-ot-muted mb-3">SON HABERLER (Bayes güncellemesinde kullanıldı)</h3>
-                        <ul class="space-y-2 text-sm">
-                            @foreach (var news in result.RecentNews.Take(5))
-                            {
-                                <li class="border-l-2 border-ot-border pl-3 py-1">
-                                    <span>@news</span>
-                                </li>
-                            }
-                        </ul>
+                    <div style="font-family:var(--f-hand); font-size:13px; line-height:1.55; color:var(--wf-ink); flex:1;">
+                        @if (!string.IsNullOrEmpty(result.AiCommentary))
+                        {
+                            @result.AiCommentary
+                        }
+                        else
+                        {
+                            <span style="color:var(--wf-ink-mute);">Gemini yorumu bekleniyor…</span>
+                        }
                     </div>
-                }
-
-                @* — PAPER TRADE PANEL — *@
-                <div class="lg:col-span-3 bg-ot-card border-2 border-ot-primary rounded-xl p-5">
-                    <h3 class="text-sm text-ot-muted mb-3">📈 PAPER TRADE</h3>
-
-                    @if (portfolio != null)
-                    {
-                        <div class="mb-4 grid grid-cols-3 gap-3 text-sm">
-                            <div>
-                                <div class="text-xs text-ot-muted">Nakit</div>
-                                <div class="font-bold">$@portfolio.Cash.ToString("F2")</div>
-                            </div>
-                            <div>
-                                <div class="text-xs text-ot-muted">Pozisyon</div>
-                                <div class="font-bold">$@portfolio.PositionsValue.ToString("F2")</div>
-                            </div>
-                            <div>
-                                <div class="text-xs text-ot-muted">Toplam Sermaye</div>
-                                <div class="font-bold text-ot-primary">$@portfolio.TotalEquity.ToString("F2")</div>
-                            </div>
-                        </div>
-                    }
-
-                    <div class="flex flex-wrap gap-3 items-end">
-                        <div>
-                            <label class="block text-xs text-ot-muted mb-1">Adet</label>
-                            <input type="number" @bind="tradeShares" min="1" step="1"
-                                   class="w-24 bg-ot-surface border border-ot-border rounded-lg px-3 py-2" />
-                        </div>
-                        <button @onclick="ExecuteBuy" disabled="@isTrading"
-                                class="bg-ot-primary text-ot-bg font-semibold px-5 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button @onclick="ExecuteBuy" disabled="@isTrading" class="wf-btn success sm">
                             AL @result.Symbol
                         </button>
-                        <button @onclick="ExecuteSell" disabled="@isTrading"
-                                class="bg-ot-danger text-white font-semibold px-5 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
+                        <button @onclick="ExecuteSell" disabled="@isTrading" class="wf-btn danger sm">
                             SAT
                         </button>
                         @if (result.Kelly?.Shares > 0)
                         {
-                            <button @onclick="UseKellyShares"
-                                    class="border border-ot-primary text-ot-primary px-4 py-2 rounded-lg text-sm hover:bg-ot-primary/10">
+                            <button @onclick="UseKellyShares" class="wf-btn sm">
                                 Kelly öneri: @result.Kelly.Shares hisse
                             </button>
                         }
                     </div>
-
                     @if (!string.IsNullOrEmpty(tradeMsg))
                     {
-                        <div class="mt-3 text-sm @(tradeSuccess ? "text-ot-primary" : "text-ot-danger")">
+                        <div style="font-family:var(--f-mono); font-size:11px; color:@(tradeSuccess ? "var(--wf-buy)" : "var(--wf-sell)");">
                             @tradeMsg
                         </div>
                     }
                 </div>
+            </div>
 
+            @* ── Chart placeholder (TradingView — Faza 8) ── *@
+            <div class="sk-card dashed" style="margin-bottom:14px; height:160px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px;">
+                <span style="font-size:22px; opacity:0.3;">📈</span>
+                <span class="sk-tag" style="opacity:0.5;">TradingView lightweight-charts — Faza 8</span>
+                <span style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">
+                    Giriş $@(result.Targets?.Entry.ToString("F2") ?? "—") · Hedef $@(result.Targets?.Target.ToString("F2") ?? "—") · Stop $@(result.Targets?.StopLoss.ToString("F2") ?? "—")
+                </span>
+            </div>
+
+            @* ── EV / Kelly / Bayes — 3 kart ── *@
+            <div class="sk-grid-3" style="margin-bottom:14px;">
+
+                @* EV Card *@
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Beklenen Değer (EV)</span>
+                        <span class="sk-h-meta">lot başına</span>
+                    </div>
+                    <div class="sk-row" style="align-items:baseline; gap:10px; margin-bottom:10px;">
+                        <span class="sk-num sk-num-xl" style="color:@(result.Ev?.Value >= 0 ? "var(--wf-buy)" : "var(--wf-sell)")">
+                            @(result.Ev?.Value >= 0 ? "+" : "")$@(result.Ev?.Value.ToString("F2") ?? "—")
+                        </span>
+                        <span class="sk-tag">ROI %@(result.Ev?.RoiPct.ToString("F1") ?? "—")</span>
+                    </div>
+                    <div style="font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-dim); margin-bottom:8px;">
+                        EV = P(kaz)·R⁺ − P(kay)·R⁻
+                    </div>
+                    <div class="sk-divider"></div>
+                    <div class="sk-row-between" style="margin-bottom:4px;">
+                        <span class="sk-tag">P(kazanç)</span>
+                        <div class="sk-row" style="gap:6px; flex:1; margin-left:10px;">
+                            <div class="bar-track" style="flex:1;"><div class="bar-fill buy" style="width:@(winPct)%;"></div></div>
+                            <span class="sk-num sk-num-sm" style="color:var(--wf-buy);">%@winPct</span>
+                        </div>
+                    </div>
+                    <div class="sk-row-between">
+                        <span class="sk-tag">P(kayıp)</span>
+                        <div class="sk-row" style="gap:6px; flex:1; margin-left:10px;">
+                            <div class="bar-track" style="flex:1;"><div class="bar-fill sell" style="width:@(losePct)%;"></div></div>
+                            <span class="sk-num sk-num-sm" style="color:var(--wf-sell);">%@losePct</span>
+                        </div>
+                    </div>
+                </div>
+
+                @* Kelly Card *@
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Kelly Fraction</span>
+                        <span class="sk-h-meta">f* = (bp−q)/b</span>
+                    </div>
+                    <div class="sk-row" style="align-items:baseline; gap:10px; margin-bottom:8px;">
+                        <span class="sk-num sk-num-xl" style="color:var(--wf-info);">
+                            %@(result.Kelly?.FullPct.ToString("F1") ?? "—")
+                        </span>
+                        <span class="sk-tag">→ @result.Kelly?.Shares hisse</span>
+                    </div>
+                    <div class="bar-track" style="height:8px; margin-bottom:8px;">
+                        <div class="bar-fill info" style="width:@(Math.Min(result.Kelly?.FullPct ?? 0, 100))%;"></div>
+                    </div>
+                    <div class="sk-divider"></div>
+                    <div class="sk-row-between" style="margin-bottom:3px;">
+                        <span class="sk-tag">Tam Kelly</span>
+                        <span class="sk-num sk-num-sm">%@(result.Kelly?.FullPct.ToString("F1") ?? "—")</span>
+                    </div>
+                    <div class="sk-row-between" style="margin-bottom:3px;">
+                        <span class="sk-tag" style="color:var(--wf-mentor);">Çeyrek Kelly (önerilen)</span>
+                        <span class="sk-num sk-num-sm" style="color:var(--wf-mentor);">%@(result.Kelly?.QuarterPct.ToString("F1") ?? "—")</span>
+                    </div>
+                    <div class="sk-row-between">
+                        <span class="sk-tag">Önerilen $</span>
+                        <span class="sk-num sk-num-sm">$@(result.Kelly?.DollarAmount.ToString("F0") ?? "—")</span>
+                    </div>
+                </div>
+
+                @* Bayes Card *@
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Bayes Posterior</span>
+                        <span class="sk-h-meta">P(AL | gözlem)</span>
+                    </div>
+                    <div class="sk-row" style="align-items:baseline; gap:10px; margin-bottom:8px;">
+                        <span class="sk-num sk-num-xl" style="color:var(--wf-mentor);">%@posteriorPct</span>
+                        <span class="sk-tag" style="color:@(bayesDelta >= 0 ? "var(--wf-buy)" : "var(--wf-sell)")">
+                            @(bayesDelta >= 0 ? "+" : "")@bayesDelta pp
+                        </span>
+                    </div>
+                    <div style="position:relative; height:28px; background:var(--wf-surface-3); border-radius:4px; margin-bottom:14px;">
+                        <div style="position:absolute; left:@(priorPct)%; top:0; bottom:0; width:2px; background:var(--wf-ink-mute);"></div>
+                        <div style="position:absolute; left:@(posteriorPct)%; top:0; bottom:0; width:2px; background:var(--wf-mentor);"></div>
+                    </div>
+                    <div class="sk-divider"></div>
+                    <div style="font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-dim); line-height:1.6;">
+                        önsel <span style="color:var(--wf-ink)">%@priorPct</span>
+                        → posterior <span style="color:var(--wf-mentor)">%@posteriorPct</span><br/>
+                        @if (!string.IsNullOrEmpty(result.Probability?.NewsDirection))
+                        {
+                            <span>haber yönü: <span style="color:var(--wf-ink)">@result.Probability.NewsDirection</span></span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @* ── Haberler + Teknik Sinyaller ── *@
+            <div class="sk-grid-2" style="margin-bottom:14px;">
+
+                @* Haberler *@
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Haber & Olay Akışı</span>
+                        <span class="sk-h-meta">Bayes güncellemesinde kullanıldı</span>
+                    </div>
+                    @if (result.RecentNews != null && result.RecentNews.Any())
+                    {
+                        <div style="display:flex; flex-direction:column; gap:0;">
+                            @foreach (var news in result.RecentNews.Take(5))
+                            {
+                                var idx = result.RecentNews.IndexOf(news);
+                                <div style="display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-top:@(idx>0 ? "1px dashed var(--wf-border)" : "none");">
+                                    <span style="font-family:var(--f-mono); font-size:9px; text-transform:uppercase; color:var(--wf-ink-mute); flex-shrink:0; margin-top:2px;">● haber</span>
+                                    <span style="font-family:var(--f-hand); font-size:13px; color:var(--wf-ink); line-height:1.4;">@news</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="sk-tag" style="color:var(--wf-ink-mute);">Haber yok</span>
+                    }
+                </div>
+
+                @* Fundamentals / Sinyaller *@
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Temel Göstergeler</span>
+                        <span class="sk-h-meta">@result.Symbol</span>
+                    </div>
+                    @if (result.Fundamentals != null)
+                    {
+                        <div class="sk-grid-2" style="gap:6px;">
+                            @FundStat("F/K", result.Fundamentals.PeRatio != null ? result.Fundamentals.PeRatio.Value.ToString("F1") : null)
+                            @FundStat("EPS", result.Fundamentals.Eps != null ? $"${result.Fundamentals.Eps.Value:F2}" : null)
+                            @FundStat("Gelir Büyüme", result.Fundamentals.RevenueGrowth != null ? $"%{result.Fundamentals.RevenueGrowth.Value:F1}" : null)
+                            @FundStat("Brüt Marj", result.Fundamentals.GrossMargins != null ? $"%{result.Fundamentals.GrossMargins.Value:F1}" : null)
+                            @FundStat("D/E", result.Fundamentals.DebtToEquity?.ToString("F2"))
+                            @FundStat("52w Yüksek", result.Fundamentals.FiftyTwoWeekHigh != null ? $"${result.Fundamentals.FiftyTwoWeekHigh.Value:F2}" : null)
+                            @FundStat("52w Düşük", result.Fundamentals.FiftyTwoWeekLow != null ? $"${result.Fundamentals.FiftyTwoWeekLow.Value:F2}" : null)
+                            @FundStat("Analist Hedef", result.AnalystTarget != null ? $"${result.AnalystTarget.Value:F2}" : null)
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(result.AnalystRecommendation))
+                    {
+                        <div class="sk-divider"></div>
+                        <div class="sk-row-between">
+                            <span class="sk-tag">Analist tavsiye</span>
+                            <span class="v-badge hold">@result.AnalystRecommendation</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* ── Paper Trade Panel ── *@
+            <div class="sk-card thick" style="border-color:var(--wf-info); background:var(--wf-info-soft); margin-bottom:14px;">
+                <div class="sk-card-h">
+                    <span class="sk-h-title">Paper Trading</span>
+                    <span class="sk-h-meta">simüle pozisyon</span>
+                </div>
+                @if (portfolio != null)
+                {
+                    <div class="sk-grid-3" style="margin-bottom:12px; gap:8px;">
+                        <div style="display:flex; flex-direction:column; gap:2px;">
+                            <span class="sk-tag">Nakit</span>
+                            <span class="sk-num sk-num-md">$@portfolio.Cash.ToString("F2")</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:2px;">
+                            <span class="sk-tag">Pozisyon</span>
+                            <span class="sk-num sk-num-md">$@portfolio.PositionsValue.ToString("F2")</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:2px;">
+                            <span class="sk-tag">Toplam Sermaye</span>
+                            <span class="sk-num sk-num-md" style="color:var(--wf-mentor);">$@portfolio.TotalEquity.ToString("F2")</span>
+                        </div>
+                    </div>
+                }
+                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                    <div>
+                        <span class="sk-tag" style="display:block; margin-bottom:3px;">Adet</span>
+                        <input type="number" @bind="tradeShares" min="1" step="1" class="sk-input" style="width:80px;" />
+                    </div>
+                    <button @onclick="ExecuteBuy" disabled="@isTrading" class="wf-btn success">AL @result.Symbol</button>
+                    <button @onclick="ExecuteSell" disabled="@isTrading" class="wf-btn danger">SAT</button>
+                    @if (result.Kelly?.Shares > 0)
+                    {
+                        <button @onclick="UseKellyShares" class="wf-btn sm">
+                            Kelly: @result.Kelly.Shares lot
+                        </button>
+                    }
+                </div>
+                @if (!string.IsNullOrEmpty(tradeMsg))
+                {
+                    <div style="margin-top:8px; font-family:var(--f-mono); font-size:11px; color:@(tradeSuccess ? "var(--wf-buy)" : "var(--wf-sell)");">
+                        @tradeMsg
+                    </div>
+                }
+            </div>
+        }
+        else if (!isLoading)
+        {
+            @* Empty state *@
+            <div style="text-align:center; padding:80px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
+                <div style="font-size:32px; margin-bottom:12px;">◎</div>
+                <div style="font-size:18px; margin-bottom:6px;">Sembol gir, analizi başlat</div>
+                <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">EV · Kelly · Bayes · Gemini AI yorumu</div>
             </div>
         }
 
-    </div>
+    </main>
+
+    @* ── Mentor Panel ── *@
+    <aside class="ha-mentor-col">
+        <div class="mentor-card">
+            <div class="mentor-head">
+                <div class="mentor-avatar">M</div>
+                <div class="sk-stack" style="flex:1;">
+                    <div class="mentor-name">Mentor · Doğa</div>
+                    <div class="mentor-role">KUANTİTATİF ANALİST</div>
+                </div>
+                <span class="sk-tag" style="color:var(--wf-mentor);">● online</span>
+            </div>
+            <div class="mentor-stream">
+                @if (result != null && result.Success)
+                {
+                    var ev = result.Ev?.Value ?? 0;
+                    var kf = result.Kelly?.QuarterPct ?? 0;
+                    <div class="mentor-bubble">
+                        @if (ev > 0)
+                        {
+                            <b style="color:var(--wf-mentor);">EV pozitif (+$@(ev.ToString("F2")))</b>
+                        }
+                        else
+                        {
+                            <b style="color:var(--wf-sell);">EV negatif ($@(ev.ToString("F2")))</b>
+                        }
+                        @if (kf > 0)
+                        {
+                            <span> · Kelly fraction <b>%@(kf.ToString("F1"))</b> — pozisyon buna göre ayarla.</span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(result.AiCommentary))
+                    {
+                        <div class="mentor-bubble">
+                            @result.AiCommentary
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="mentor-bubble">
+                        Analiz sonucunu bekliyor…<br/>
+                        <span style="color:var(--wf-ink-mute); font-size:12px;">Sembol girip analiz et butonu ile başla.</span>
+                    </div>
+                }
+            </div>
+            <div class="mentor-suggested">
+                <span class="wf-chip">Neden Kelly düşük?</span>
+                <span class="wf-chip">EV nasıl hesaplandı?</span>
+                <span class="wf-chip">Risk planı kur</span>
+            </div>
+            <div class="mentor-input-row">
+                <span style="opacity:0.5;">Mentor'a sor… (Faza 7)</span>
+                <span style="margin-left:auto; font-family:var(--f-mono); font-size:11px; color:var(--wf-mentor);">⌘K</span>
+            </div>
+        </div>
+
+        @* Paper portfolio mini özet *@
+        @if (portfolio != null)
+        {
+            <div class="sk-card dashed" style="margin-top:4px;">
+                <div class="sk-card-h">
+                    <span class="sk-h-title">Paper Portfolio</span>
+                    <span class="sk-h-meta">simüle</span>
+                </div>
+                <div class="sk-row-between" style="margin-bottom:6px;">
+                    <span class="sk-tag">Toplam</span>
+                    <span class="sk-num sk-num-md" style="color:var(--wf-mentor);">$@portfolio.TotalEquity.ToString("F0")</span>
+                </div>
+                <div class="sk-row-between">
+                    <span class="sk-tag">Nakit</span>
+                    <span class="sk-num sk-num-sm">$@portfolio.Cash.ToString("F0")</span>
+                </div>
+                @if (portfolio.Positions?.Any() == true)
+                {
+                    <div class="sk-divider"></div>
+                    @foreach (var pos in portfolio.Positions.Take(4))
+                    {
+                        <div class="sk-row-between" style="margin-top:4px;">
+                            <span class="sk-tag" style="color:var(--wf-ink);">@pos.Symbol</span>
+                            <span class="sk-num sk-num-sm" style="color:@(pos.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)");">
+                                @(pos.Pnl >= 0 ? "+" : "")$@(pos.Pnl.ToString("F0"))
+                            </span>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </aside>
 </div>
 
 @code {
@@ -372,7 +562,7 @@
         var r = await Ajan.BuyAsync(result.Symbol, tradeShares);
         tradeSuccess = r.Success;
         tradeMsg = r.Success
-            ? $"✅ AL {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | Kalan nakit: ${r.CashRemaining:F2}"
+            ? $"✅ AL {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | Kalan: ${r.CashRemaining:F2}"
             : $"❌ {r.Error}";
 
         if (r.Success) await RefreshPortfolio();
@@ -399,10 +589,9 @@
     }
 }
 
-@* ── Inline helper render fragment ── *@
 @code {
-    private RenderFragment FundCell(string label, string? value) => @<div>
-        <div class="text-xs text-ot-muted">@label</div>
-        <div class="font-semibold">@(string.IsNullOrEmpty(value) ? "—" : value)</div>
+    private RenderFragment FundStat(string label, string? value) => @<div style="display:flex; flex-direction:column; gap:2px; padding:6px 0; border-top:1px dashed var(--wf-border);">
+        <span class="sk-tag">@label</span>
+        <span class="sk-num sk-num-md">@(string.IsNullOrEmpty(value) ? "—" : value)</span>
     </div>;
 }

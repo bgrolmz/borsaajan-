@@ -361,50 +361,84 @@ def dedupe_list_items(items: list) -> list:
     return result
 
 
-def gemini_text(prompt: str) -> dict:
-    """
-    Local, deterministic function for generating Turkish news comments.
-    NO Gemini API calls - uses keyword-based sentiment detection.
-    Returns: { "fallback": bool, "text": str }
-    """
+def _heuristic_sentiment_comment(prompt: str) -> dict:
+    """Keyword-based fallback when Gemini unavailable."""
     import re
-    
-    print("[gemini_text] Local heuristic (no API call).")
-    
-    # Extract news title from prompt (first quoted string)
     title = None
     quoted_match = re.search(r'["\']([^"\']+)["\']', prompt)
     if quoted_match:
         title = quoted_match.group(1)
     else:
-        # Fallback to prompt if parsing fails
         title = prompt[:100].strip()
-    
-    # Keyword-based sentiment detection
-    bullish_keywords = ["surge", "jump", "beats", "beat", "record", "growth", "upgrade", "strong", 
+
+    bullish_keywords = ["surge", "jump", "beats", "beat", "record", "growth", "upgrade", "strong",
                        "rally", "büyüme", "rekor", "artış", "talep", "kazanç", "pozitif", "yükseliş"]
-    
     bearish_keywords = ["slump", "drop", "falls", "miss", "downgrade", "selloff", "risk", "warning",
-                       "lawsuit", "fraud", "düşüş", "kayıp", "baskı", "negatif", "risk", "azalış", "daralma"]
-    
+                       "lawsuit", "fraud", "düşüş", "kayıp", "baskı", "negatif", "azalış", "daralma"]
+
     title_lower = title.lower()
-    
-    has_bullish = any(keyword in title_lower for keyword in bullish_keywords)
-    has_bearish = any(keyword in title_lower for keyword in bearish_keywords)
-    
-    # Determine sentiment
+    has_bullish = any(k in title_lower for k in bullish_keywords)
+    has_bearish = any(k in title_lower for k in bearish_keywords)
+
     if has_bullish and not has_bearish:
-        sentiment = "Bullish"
         comment = "Bullish - Başlık olumlu beklentiyi artırıyor ve fiyatı destekleyebilir."
     elif has_bearish and not has_bullish:
-        sentiment = "Bearish"
         comment = "Bearish - Başlık aşağı yönlü riskleri artırıyor ve fiyatı baskılayabilir."
     else:
-        sentiment = "Neutral"
         comment = "Neutral - Başlık net yön vermiyor; teyit için ek veri izlenmeli."
-    
-    # Always return success (no fallback since it's local)
-    return {"fallback": False, "text": comment}
+
+    return {"fallback": True, "text": comment}
+
+
+def gemini_text(prompt: str) -> dict:
+    """
+    Generate Turkish sentiment comment via Gemini LLM.
+    Falls back to keyword heuristic when LLM unavailable (no key, rate limit, error).
+    Returns: { "fallback": bool, "text": str }
+    """
+    if not _GOOGLE_API_KEY or not _can_call_gemini_today():
+        print("[gemini_text] LLM unavailable, using heuristic fallback.")
+        return _heuristic_sentiment_comment(prompt)
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "sentiment": {"type": "string"},
+            "text": {"type": "string"},
+        },
+        "required": ["sentiment", "text"],
+    }
+
+    wrapped_prompt = (
+        "Aşağıdaki haber/metni Türkçe değerlendir. "
+        "Sentiment alanı 'Bullish', 'Bearish' veya 'Neutral' olmalı. "
+        "text alanı 'Sentiment - tek cümle Türkçe yorum' formatında olmalı. "
+        "Yorum kısa ve net olsun (max 25 kelime).\n\n"
+        f"Metin: {prompt}\n\n"
+        "Sadece JSON döndür."
+    )
+
+    try:
+        result = safe_gemini_call(
+            wrapped_prompt,
+            response_mode="json",
+            schema=schema,
+            max_retries=1,
+            purpose="news_sentiment",
+            temperature=0.5,
+            max_output_tokens=512,
+        )
+        if result and isinstance(result, dict):
+            text = result.get("text") or ""
+            if text:
+                return {"fallback": False, "text": text.strip()}
+        print("[gemini_text] LLM returned no text, falling back to heuristic.")
+    except GeminiCallError as e:
+        print(f"[gemini_text] Gemini error: {e}, falling back to heuristic.")
+    except Exception as e:
+        print(f"[gemini_text] Unexpected error: {e}, falling back to heuristic.")
+
+    return _heuristic_sentiment_comment(prompt)
 
 def _strip_code_fences(text: str) -> str:
     """

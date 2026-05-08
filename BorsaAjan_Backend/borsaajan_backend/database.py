@@ -227,10 +227,25 @@ def init_db() -> None:
     Initialize the database: create tables if they don't exist.
     This function is idempotent - safe to call multiple times.
     Data is NEVER deleted - only creates tables if missing.
-    
+
     Should be called once at application startup (main.py).
     """
     try:
+        db_path = get_db_path()
+        env_source = "BORSA_DB_PATH" if os.environ.get("BORSA_DB_PATH") else (
+            "DB_PATH" if os.environ.get("DB_PATH") else "default(<repo_root>/data/borsa.db)"
+        )
+        exists = db_path.exists()
+        size_kb = (db_path.stat().st_size / 1024) if exists else 0
+        logger.info(
+            f"[DB] init_db() | path={db_path} | source={env_source} | "
+            f"exists={exists} | size_kb={size_kb:.1f} | cwd={Path.cwd()}"
+        )
+        print(
+            f"[DB] init_db() | path={db_path} | source={env_source} | "
+            f"exists={exists} | size_kb={size_kb:.1f} | cwd={Path.cwd()}"
+        )
+
         conn = get_connection()
         cursor = conn.cursor()
         
