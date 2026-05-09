@@ -805,7 +805,7 @@
             if (result != null && result.Success)
             {
                 contextData["symbol"] = result.Symbol ?? "";
-                contextData["decision"] = result.Decision ?? "";
+                contextData["decision"] = result.Verdict ?? "";
                 contextData["ev"] = result.Ev?.Value ?? 0;
                 contextData["kelly_pct"] = result.Kelly?.QuarterPct ?? 0;
             }
