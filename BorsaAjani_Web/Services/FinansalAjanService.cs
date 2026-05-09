@@ -109,6 +109,38 @@ public class FinansalAjanService
         }
     }
 
+    public async Task<List<PaperTrade>> GetTradesAsync(int limit = 200, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await Client.GetAsync($"/paper/trades?limit={limit}", ct);
+            if (!resp.IsSuccessStatusCode) return new();
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("trades", out var arr)) return new();
+            var list = new List<PaperTrade>();
+            foreach (var el in arr.EnumerateArray())
+            {
+                list.Add(new PaperTrade
+                {
+                    Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() ?? "" : "",
+                    Action = el.TryGetProperty("action", out var a) ? a.GetString() ?? "" : "",
+                    Shares = el.TryGetProperty("shares", out var sh) && sh.ValueKind == JsonValueKind.Number ? sh.GetDouble() : 0,
+                    Price = el.TryGetProperty("price", out var pr) && pr.ValueKind == JsonValueKind.Number ? pr.GetDouble() : 0,
+                    Total = el.TryGetProperty("total", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetDouble() : 0,
+                    Pnl = el.TryGetProperty("pnl", out var pn) && pn.ValueKind == JsonValueKind.Number ? pn.GetDouble() : 0,
+                    ExecutedAt = el.TryGetProperty("executed_at", out var e) ? e.GetString() : null,
+                });
+            }
+            return list;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetTrades exception");
+            return new();
+        }
+    }
+
     public async Task<bool> ResetPortfolioAsync(double startingCash = 100000.0, CancellationToken ct = default)
     {
         try
