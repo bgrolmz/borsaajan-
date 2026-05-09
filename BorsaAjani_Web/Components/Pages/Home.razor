@@ -99,41 +99,25 @@
             </div>
         </div>
         <nav class="flex-1 px-3 space-y-1">
-            <button class="@(activeTab == "Borsa" ? "bg-[#2d3449] text-[#00FFA3] border-r-4 border-[#00FFA3]" : "text-[#b9cbbd] hover:bg-[#131b2e]") flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left" @onclick="SwitchTabBorsa">
-                <span class="material-symbols-outlined text-xl">monitoring</span>
-                <span class="text-sm font-medium">Borsa</span>
-            </button>
-            <button class="@(activeTab == "Kripto" ? "bg-[#2d3449] text-[#00FFA3] border-r-4 border-[#00FFA3]" : "text-[#b9cbbd] hover:bg-[#131b2e]") flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left" @onclick="SwitchTabKripto">
-                <span class="material-symbols-outlined text-xl">currency_bitcoin</span>
-                <span class="text-sm font-medium">Kripto</span>
-            </button>
-            <button class="@(activeTab == "Portföy" ? "bg-[#2d3449] text-[#00FFA3] border-r-4 border-[#00FFA3]" : "text-[#b9cbbd] hover:bg-[#131b2e]") flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left" @onclick="SwitchTabPortfoy">
-                <span class="material-symbols-outlined text-xl">account_balance_wallet</span>
-                <span class="text-sm font-medium">Portföy</span>
-            </button>
-            <button class="@(activeTab == "Geçmiş" ? "bg-[#2d3449] text-[#00FFA3] border-r-4 border-[#00FFA3]" : "text-[#b9cbbd] hover:bg-[#131b2e]") flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left" @onclick="SwitchTabGecmis">
-                <span class="material-symbols-outlined text-xl">query_stats</span>
-                <span class="text-sm font-medium">Geçmiş</span>
-            </button>
-            <a href="/hisse-analizi" class="text-[#00FFA3]/70 hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/20 rounded-lg mt-2">
+            <a href="/hisse-analizi" class="text-[#00FFA3] hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/30 rounded-lg">
                 <span class="material-symbols-outlined text-xl">auto_awesome</span>
-                <span class="text-sm font-medium">Yeni Analiz ✦</span>
+                <span class="text-sm font-medium">Hisse Analizi</span>
             </a>
             <a href="/watchlist" class="text-[#00FFA3]/70 hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/20 rounded-lg">
                 <span class="material-symbols-outlined text-xl">star</span>
-                <span class="text-sm font-medium">Watchlist ✦</span>
+                <span class="text-sm font-medium">Watchlist</span>
             </a>
             <a href="/paper-trading" class="text-[#00FFA3]/70 hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/20 rounded-lg">
-                <span class="material-symbols-outlined text-xl">science</span>
-                <span class="text-sm font-medium">Paper Trading ✦</span>
+                <span class="material-symbols-outlined text-xl">account_balance_wallet</span>
+                <span class="text-sm font-medium">Portföy</span>
             </a>
             <a href="/gecmis" class="text-[#00FFA3]/70 hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/20 rounded-lg">
                 <span class="material-symbols-outlined text-xl">history</span>
-                <span class="text-sm font-medium">Geçmiş ✦</span>
+                <span class="text-sm font-medium">Geçmiş</span>
             </a>
             <button class="@(activeTab == "Bildirimler" ? "bg-[#2d3449] text-[#00FFA3] border-r-4 border-[#00FFA3]" : "text-[#b9cbbd] hover:bg-[#131b2e]") flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left" @onclick="SwitchTabBildirimler">
                 <span class="material-symbols-outlined text-xl">notifications</span>
-                <span class="text-sm font-medium">Bildirimler</span>
+                <span class="text-sm font-medium">Haberler & Bildirimler</span>
             </button>
         </nav>
     </aside>
@@ -5205,7 +5189,7 @@
 
 @code {
     // Tab Management
-    private string activeTab = "Borsa";
+    private string activeTab = "Bildirimler";
     
     // Stock/Crypto Analysis
     private string mod = "STOCK";
