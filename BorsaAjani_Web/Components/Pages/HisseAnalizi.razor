@@ -780,8 +780,10 @@
         }
         if (result.Probability != null)
         {
-            ctx["bayes_posterior"] = (int)Math.Round((result.Probability.AfterNews ?? result.Probability.Initial ?? 0.5) * 100);
-            ctx["bayes_prior"] = (int)Math.Round((result.Probability.Initial ?? 0.5) * 100);
+            var post = result.Probability.AfterNews > 0 ? result.Probability.AfterNews : (result.Probability.Initial > 0 ? result.Probability.Initial : 0.5);
+            var prior = result.Probability.Initial > 0 ? result.Probability.Initial : 0.5;
+            ctx["bayes_posterior"] = (int)Math.Round(post * 100);
+            ctx["bayes_prior"] = (int)Math.Round(prior * 100);
         }
         if (result.Targets != null)
         {
