@@ -99,7 +99,11 @@
             </div>
         </div>
         <nav class="flex-1 px-3 space-y-1">
-            <a href="/hisse-analizi" class="text-[#00FFA3] hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/30 rounded-lg">
+            <button class="@(activeTab == "Bildirimler" ? "bg-[#2d3449] text-[#00FFA3] border-r-4 border-[#00FFA3]" : "text-[#00FFA3]/70 hover:text-[#00FFA3] hover:bg-[#131b2e]") flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/20 rounded-lg" @onclick="SwitchTabBildirimler">
+                <span class="material-symbols-outlined text-xl">home</span>
+                <span class="text-sm font-medium">Anasayfa</span>
+            </button>
+            <a href="/hisse-analizi" class="text-[#00FFA3]/70 hover:text-[#00FFA3] hover:bg-[#131b2e] flex items-center gap-3 w-full px-4 py-3 transition-all duration-300 text-left border border-[#00FFA3]/20 rounded-lg">
                 <span class="material-symbols-outlined text-xl">auto_awesome</span>
                 <span class="text-sm font-medium">Hisse Analizi</span>
             </a>
@@ -5681,6 +5685,7 @@
     {
         activeTab = tab;
         selectedNewsItem = null;
+        _ = SaveActiveTab(tab);
         if (tab == "Borsa")
         {
             mod = "STOCK";
@@ -5808,8 +5813,25 @@
         {
             await LoadReadIds();
             readIdsLoaded = true;
+
+            try
+            {
+                var saved = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "home_active_tab");
+                if (!string.IsNullOrWhiteSpace(saved) && saved != activeTab)
+                {
+                    SwitchTab(saved);
+                }
+            }
+            catch { }
+
             StateHasChanged();
         }
+    }
+
+    private async Task SaveActiveTab(string tab)
+    {
+        try { await JSRuntime.InvokeVoidAsync("localStorage.setItem", "home_active_tab", tab); }
+        catch { }
     }
     
     // Educational Tooltips Dictionary
