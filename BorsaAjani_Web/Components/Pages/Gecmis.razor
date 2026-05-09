@@ -48,58 +48,178 @@
         }
         else
         {
+            var nowUtc = DateTime.UtcNow;
+            int last7 = items.Count(x => ParseDate(x.CreatedAt) is DateTime d7 && (nowUtc - d7).TotalDays <= 7);
+            int last30 = items.Count(x => ParseDate(x.CreatedAt) is DateTime d30 && (nowUtc - d30).TotalDays <= 30);
+            int distinctSymbols = items.Select(x => x.Symbol).Distinct().Count();
+            int stockCnt = items.Count(x => x.Mode != "CRYPTO");
+            int cryptoCnt = items.Count(x => x.Mode == "CRYPTO");
+            int riskLow = items.Count(x => IsRiskLow(x.RiskLevel));
+            int riskMed = items.Count(x => IsRiskMed(x.RiskLevel));
+            int riskHigh = items.Count(x => IsRiskHigh(x.RiskLevel));
+
+            <div class="sk-grid-3" style="margin-bottom:14px;">
+                <div class="sk-card">
+                    <div class="sk-card-h"><span class="sk-h-title">Toplam</span></div>
+                    <span class="sk-num sk-num-xl">@items.Count</span>
+                    <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@distinctSymbols farklı sembol · @stockCnt hisse · @cryptoCnt kripto</div>
+                </div>
+                <div class="sk-card">
+                    <div class="sk-card-h"><span class="sk-h-title">Son Aktivite</span></div>
+                    <span class="sk-num sk-num-xl">@last7</span>
+                    <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">Son 7 gün · @last30 son 30 gün</div>
+                </div>
+                <div class="sk-card">
+                    <div class="sk-card-h"><span class="sk-h-title">Risk Dağılımı</span></div>
+                    <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                        <span class="v-badge buy" style="font-size:10px;">DÜŞÜK @riskLow</span>
+                        <span class="v-badge hold" style="font-size:10px;">ORTA @riskMed</span>
+                        <span class="v-badge sell" style="font-size:10px;">YÜKSEK @riskHigh</span>
+                    </div>
+                </div>
+            </div>
+
+            @* Filters *@
+            <div class="sk-card" style="margin-bottom:14px; padding:10px 14px;">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <div style="display:flex; gap:0;">
+                        @foreach (var f in new[] { ("ALL", "Tümü"), ("STOCK", "Hisse"), ("CRYPTO", "Kripto") })
+                        {
+                            <button @onclick="@(() => modeFilter = f.Item1)"
+                                    style="padding:5px 12px; font-family:var(--f-hand); font-size:12px; font-weight:600; border:1px solid var(--wf-border); cursor:pointer;
+                                           background:@(modeFilter == f.Item1 ? "var(--wf-acc)" : "transparent");
+                                           color:@(modeFilter == f.Item1 ? "white" : "var(--wf-ink-mute)");">
+                                @f.Item2
+                            </button>
+                        }
+                    </div>
+                    <div style="display:flex; gap:0;">
+                        @foreach (var r in new[] { ("ALL", "Tüm Risk"), ("LOW", "Düşük"), ("MED", "Orta"), ("HIGH", "Yüksek") })
+                        {
+                            <button @onclick="@(() => riskFilter = r.Item1)"
+                                    style="padding:5px 10px; font-family:var(--f-mono); font-size:11px; border:1px solid var(--wf-border); cursor:pointer;
+                                           background:@(riskFilter == r.Item1 ? "var(--wf-ink)" : "transparent");
+                                           color:@(riskFilter == r.Item1 ? "white" : "var(--wf-ink-mute)");">
+                                @r.Item2
+                            </button>
+                        }
+                    </div>
+                    <input @bind="searchText" @bind:event="oninput" placeholder="🔍 Sembol veya özet…" class="sk-input" style="flex:1; min-width:180px;" />
+                    <select @bind="rangeFilter" class="sk-input" style="width:130px;">
+                        <option value="ALL">Tüm zamanlar</option>
+                        <option value="7">Son 7 gün</option>
+                        <option value="30">Son 30 gün</option>
+                        <option value="90">Son 90 gün</option>
+                    </select>
+                </div>
+            </div>
+
+            var filtered = FilterAndSort();
+
             <div class="sk-card">
                 <div class="sk-card-h">
                     <span class="sk-h-title">Analiz Kayıtları</span>
-                    <span class="sk-h-meta">@items.Count adet</span>
+                    <span class="sk-h-meta">@filtered.Count / @items.Count</span>
                 </div>
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr style="border-bottom:1px solid var(--wf-border);">
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tür</th>
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Özet</th>
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Risk</th>
-                            <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat</th>
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tarih</th>
-                            <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var h in items)
-                        {
-                            var riskCls = (h.RiskLevel?.ToUpper()) switch
-                            {
-                                "LOW" or "DÜŞÜK" => "buy",
-                                "HIGH" or "YÜKSEK" => "sell",
-                                _ => "hold"
-                            };
-                            <tr style="border-bottom:1px dashed var(--wf-border);">
-                                <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@h.Symbol</td>
-                                <td style="padding:10px 4px;">
-                                    <span class="v-badge @(h.Mode == "CRYPTO" ? "hold" : "buy")" style="font-size:10px;">
-                                        @(h.Mode == "CRYPTO" ? "KRİPTO" : "HİSSE")
-                                    </span>
-                                </td>
-                                <td style="padding:10px 4px; font-family:var(--f-hand); font-size:12px; color:var(--wf-ink-dim); max-width:340px;">
-                                    @(string.IsNullOrEmpty(h.Summary) ? "—" : (h.Summary.Length > 120 ? h.Summary.Substring(0, 120) + "…" : h.Summary))
-                                </td>
-                                <td style="padding:10px 4px;">
-                                    <span class="v-badge @riskCls" style="font-size:10px;">@(h.RiskLevel ?? "—")</span>
-                                </td>
-                                <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">
-                                    @(h.PriceAtAnalysis.HasValue ? $"${h.PriceAtAnalysis.Value:F2}" : "—")
-                                </td>
-                                <td style="padding:10px 4px; font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">
-                                    @(string.IsNullOrEmpty(h.CreatedAt) ? "—" : h.CreatedAt.Substring(0, Math.Min(16, h.CreatedAt.Length)).Replace("T", " "))
-                                </td>
-                                <td style="padding:10px 4px; text-align:right;">
-                                    <a href="/hisse-analizi/@h.Symbol" class="wf-btn xs">▶</a>
-                                </td>
+                @if (!filtered.Any())
+                {
+                    <div style="padding:30px 0; text-align:center; font-family:var(--f-hand); color:var(--wf-ink-dim);">Filtreyle eşleşen kayıt yok.</div>
+                }
+                else
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--wf-border);">
+                                <th @onclick='() => SetSort("symbol")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol @SortArrow("symbol")</th>
+                                <th @onclick='() => SetSort("mode")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tür @SortArrow("mode")</th>
+                                <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Özet</th>
+                                <th @onclick='() => SetSort("risk")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Risk @SortArrow("risk")</th>
+                                <th @onclick='() => SetSort("price")' style="cursor:pointer; text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat @SortArrow("price")</th>
+                                <th @onclick='() => SetSort("date")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tarih @SortArrow("date")</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach (var h in filtered)
+                            {
+                                var riskCls = IsRiskLow(h.RiskLevel) ? "buy" : IsRiskHigh(h.RiskLevel) ? "sell" : "hold";
+                                <tr style="border-bottom:1px dashed var(--wf-border); cursor:pointer;" @onclick="@(() => OpenDetail(h))">
+                                    <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@h.Symbol</td>
+                                    <td style="padding:10px 4px;">
+                                        <span class="v-badge @(h.Mode == "CRYPTO" ? "hold" : "buy")" style="font-size:10px;">
+                                            @(h.Mode == "CRYPTO" ? "KRİPTO" : "HİSSE")
+                                        </span>
+                                    </td>
+                                    <td style="padding:10px 4px; font-family:var(--f-hand); font-size:12px; color:var(--wf-ink-dim); max-width:340px;">
+                                        @(string.IsNullOrEmpty(h.Summary) ? "—" : (h.Summary.Length > 120 ? h.Summary.Substring(0, 120) + "…" : h.Summary))
+                                    </td>
+                                    <td style="padding:10px 4px;">
+                                        <span class="v-badge @riskCls" style="font-size:10px;">@(h.RiskLevel ?? "—")</span>
+                                    </td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">
+                                        @(h.PriceAtAnalysis.HasValue ? $"${h.PriceAtAnalysis.Value:F2}" : "—")
+                                    </td>
+                                    <td style="padding:10px 4px; font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">
+                                        @FormatDate(h.CreatedAt)
+                                    </td>
+                                    <td style="padding:10px 4px; text-align:right;" @onclick:stopPropagation="true">
+                                        <button @onclick="@(() => OpenDetail(h))" class="wf-btn xs">⊕</button>
+                                        <a href="/hisse-analizi/@h.Symbol" class="wf-btn xs">▶</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+
+        @* Detail Modal *@
+        @if (detailItem != null)
+        {
+            <div @onclick="CloseDetail"
+                 style="position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9000; display:flex; align-items:center; justify-content:center; padding:20px;">
+                <div @onclick:stopPropagation="true"
+                     style="background:var(--wf-paper); max-width:680px; width:100%; max-height:88vh; overflow-y:auto; border:1px solid var(--wf-border); border-radius:6px; padding:20px;">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; border-bottom:1px solid var(--wf-border); padding-bottom:10px; margin-bottom:14px;">
+                        <div>
+                            <div style="font-family:var(--f-hand); font-size:24px; font-weight:600; color:var(--wf-ink);">@detailItem.Symbol</div>
+                            <div style="display:flex; gap:8px; align-items:center; margin-top:4px;">
+                                <span class="v-badge @(detailItem.Mode == "CRYPTO" ? "hold" : "buy")" style="font-size:10px;">@(detailItem.Mode == "CRYPTO" ? "KRİPTO" : "HİSSE")</span>
+                                <span class="v-badge @(IsRiskLow(detailItem.RiskLevel) ? "buy" : IsRiskHigh(detailItem.RiskLevel) ? "sell" : "hold")" style="font-size:10px;">@(detailItem.RiskLevel ?? "—")</span>
+                                <span style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@FormatDate(detailItem.CreatedAt)</span>
+                            </div>
+                        </div>
+                        <button @onclick="CloseDetail" class="wf-btn xs">✕</button>
+                    </div>
+
+                    <div class="sk-grid-3" style="margin-bottom:14px;">
+                        <div class="sk-card">
+                            <div class="sk-card-h"><span class="sk-h-title">Analiz Anı Fiyat</span></div>
+                            <span class="sk-num sk-num-xl">@(detailItem.PriceAtAnalysis.HasValue ? $"${detailItem.PriceAtAnalysis.Value:F2}" : "—")</span>
+                        </div>
+                        <div class="sk-card">
+                            <div class="sk-card-h"><span class="sk-h-title">ID</span></div>
+                            <span class="sk-num" style="font-family:var(--f-mono); font-size:14px;">#@detailItem.Id</span>
+                        </div>
+                        <div class="sk-card">
+                            <div class="sk-card-h"><span class="sk-h-title">Risk</span></div>
+                            <span class="sk-num" style="font-size:18px;">@(detailItem.RiskLevel ?? "—")</span>
+                        </div>
+                    </div>
+
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Özet</span></div>
+                        <div style="font-family:var(--f-hand); font-size:14px; color:var(--wf-ink); line-height:1.55; white-space:pre-wrap; padding:8px 0;">
+                            @(string.IsNullOrEmpty(detailItem.Summary) ? "Bu analiz için özet kaydedilmemiş." : detailItem.Summary)
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:8px; margin-top:14px; justify-content:flex-end;">
+                        <button @onclick="CloseDetail" class="wf-btn sm">Kapat</button>
+                        <a href="/hisse-analizi/@detailItem.Symbol" class="wf-btn sm primary">▶ Yeni Analiz</a>
+                    </div>
+                </div>
             </div>
         }
     </main>
@@ -127,21 +247,113 @@
     private List<HistoryItem>? items;
     private bool isLoading = true;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await Load();
-    }
+    // Filters
+    private string modeFilter = "ALL";
+    private string riskFilter = "ALL";
+    private string searchText = "";
+    private string rangeFilter = "ALL";
+
+    // Sort
+    private string sortBy = "date";
+    private bool sortDesc = true;
+
+    // Detail
+    private HistoryItem? detailItem;
+
+    protected override async Task OnInitializedAsync() => await Load();
 
     private async Task Load()
     {
         isLoading = true;
-        try
-        {
-            items = await Ajan.GetHistoryAsync();
-        }
-        finally
-        {
-            isLoading = false;
-        }
+        try { items = await Ajan.GetHistoryAsync(); }
+        finally { isLoading = false; }
     }
+
+    private static DateTime? ParseDate(string? iso)
+    {
+        if (string.IsNullOrEmpty(iso)) return null;
+        if (DateTime.TryParse(iso, null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var dt))
+            return dt;
+        return null;
+    }
+
+    private static string FormatDate(string? iso)
+    {
+        var d = ParseDate(iso);
+        if (d == null) return iso ?? "—";
+        return d.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private static bool IsRiskLow(string? r)
+    {
+        var u = (r ?? "").ToUpperInvariant();
+        return u == "LOW" || u == "DÜŞÜK" || u == "DUSUK" || u == "1" || u == "2";
+    }
+    private static bool IsRiskMed(string? r)
+    {
+        var u = (r ?? "").ToUpperInvariant();
+        return u == "MED" || u == "MEDIUM" || u == "ORTA" || u == "3";
+    }
+    private static bool IsRiskHigh(string? r)
+    {
+        var u = (r ?? "").ToUpperInvariant();
+        return u == "HIGH" || u == "YÜKSEK" || u == "YUKSEK" || u == "4" || u == "5";
+    }
+
+    private void SetSort(string col)
+    {
+        if (sortBy == col) sortDesc = !sortDesc;
+        else { sortBy = col; sortDesc = true; }
+    }
+
+    private string SortArrow(string col) => sortBy == col ? (sortDesc ? "▼" : "▲") : "";
+
+    private List<HistoryItem> FilterAndSort()
+    {
+        if (items == null) return new();
+        IEnumerable<HistoryItem> q = items;
+
+        if (modeFilter == "STOCK") q = q.Where(x => x.Mode != "CRYPTO");
+        else if (modeFilter == "CRYPTO") q = q.Where(x => x.Mode == "CRYPTO");
+
+        if (riskFilter == "LOW") q = q.Where(x => IsRiskLow(x.RiskLevel));
+        else if (riskFilter == "MED") q = q.Where(x => IsRiskMed(x.RiskLevel));
+        else if (riskFilter == "HIGH") q = q.Where(x => IsRiskHigh(x.RiskLevel));
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var s = searchText.Trim();
+            q = q.Where(x =>
+                (x.Symbol?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (x.Summary?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (rangeFilter != "ALL" && int.TryParse(rangeFilter, out var days))
+        {
+            var cutoff = DateTime.UtcNow.AddDays(-days);
+            q = q.Where(x => ParseDate(x.CreatedAt) is DateTime d && d >= cutoff);
+        }
+
+        q = sortBy switch
+        {
+            "symbol" => sortDesc ? q.OrderByDescending(x => x.Symbol) : q.OrderBy(x => x.Symbol),
+            "mode" => sortDesc ? q.OrderByDescending(x => x.Mode) : q.OrderBy(x => x.Mode),
+            "risk" => sortDesc ? q.OrderByDescending(x => RiskRank(x.RiskLevel)) : q.OrderBy(x => RiskRank(x.RiskLevel)),
+            "price" => sortDesc ? q.OrderByDescending(x => x.PriceAtAnalysis ?? 0) : q.OrderBy(x => x.PriceAtAnalysis ?? 0),
+            _ => sortDesc ? q.OrderByDescending(x => ParseDate(x.CreatedAt) ?? DateTime.MinValue) : q.OrderBy(x => ParseDate(x.CreatedAt) ?? DateTime.MinValue),
+        };
+
+        return q.ToList();
+    }
+
+    private static int RiskRank(string? r)
+    {
+        if (IsRiskLow(r)) return 1;
+        if (IsRiskMed(r)) return 2;
+        if (IsRiskHigh(r)) return 3;
+        return 0;
+    }
+
+    private void OpenDetail(HistoryItem h) => detailItem = h;
+    private void CloseDetail() => detailItem = null;
 }
