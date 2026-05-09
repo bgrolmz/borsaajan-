@@ -2494,6 +2494,46 @@
                 </div>
             </div>
 
+            @* ── Filter bar ── *@
+            @if (newsItems.Count > 0)
+            {
+                var unreadCount = newsItems.Count(n => !readNewsIds.Contains(n.Id));
+                <div class="mb-6 p-4 bg-[#0c0e14] border border-[#282a30]/40 flex flex-wrap gap-3 items-center text-xs font-mono uppercase">
+                    <div class="flex gap-0">
+                        @foreach (var f in new[] { ("ALL", "Tümü"), ("bullish", "▲ Pozitif"), ("bearish", "▼ Negatif"), ("neutral", "Nötr") })
+                        {
+                            var isActive = newsSentimentFilter == f.Item1;
+                            <button @onclick="@(() => newsSentimentFilter = f.Item1)"
+                                    class="@(isActive ? "bg-[#00FFA3] text-[#003920]" : "bg-[#191b22] text-[#b9cbbd]/60 hover:text-[#00FFA3]") px-3 py-1.5 border border-[#282a30] tracking-tighter">
+                                @f.Item2
+                            </button>
+                        }
+                    </div>
+                    <div class="flex gap-0">
+                        @foreach (var f in new[] { ("ALL", "TÜM"), ("HIGH", "HIGH"), ("MEDIUM", "MED"), ("LOW", "LOW") })
+                        {
+                            var isActive = newsImpactFilter == f.Item1;
+                            <button @onclick="@(() => newsImpactFilter = f.Item1)"
+                                    class="@(isActive ? "bg-[#3c4a5e] text-[#b9c7df]" : "bg-[#191b22] text-[#b9cbbd]/60 hover:text-[#b9c7df]") px-3 py-1.5 border border-[#282a30] tracking-tighter">
+                                @f.Item2
+                            </button>
+                        }
+                    </div>
+                    <input @bind="newsSymbolFilter" @bind:event="oninput" placeholder="🔍 SEMBOL VEYA BAŞLIK"
+                           class="bg-[#191b22] border border-[#282a30] text-[#e2e2eb] px-3 py-1.5 flex-1 min-w-[160px] tracking-tighter placeholder:text-[#b9cbbd]/30" />
+                    <label class="flex items-center gap-2 text-[#b9cbbd]/60 cursor-pointer select-none">
+                        <input type="checkbox" @bind="newsShowOnlyUnread" class="accent-[#00FFA3]" />
+                        SADECE OKUNMAMIŞ (@unreadCount)
+                    </label>
+                    @if (unreadCount > 0)
+                    {
+                        <button @onclick="MarkAllNewsRead" class="bg-[#191b22] text-[#00FFA3] hover:bg-[#00FFA3] hover:text-[#003920] px-3 py-1.5 border border-[#00FFA3]/30 tracking-tighter">
+                            ✓ TÜMÜNÜ OKUNDU İŞARETLE
+                        </button>
+                    }
+                </div>
+            }
+
             @if (isLoadingNotifications)
             {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[#282a30]/20 border border-[#282a30]/20">
@@ -2513,9 +2553,22 @@
             }
             else
             {
+                var filteredNews = FilterNews(newsItems);
+                if (filteredNews.Count == 0)
+                {
+                    <div class="flex flex-col items-center justify-center py-24 text-center">
+                        <span class="material-symbols-outlined text-6xl text-[#b9cbbd]/20 mb-6">filter_alt_off</span>
+                        <h3 class="text-lg font-bold uppercase tracking-widest text-[#b9cbbd]/40 mb-2">Filtreyle eşleşen kayıt yok</h3>
+                        <p class="text-xs text-[#b9cbbd]/30 uppercase tracking-widest">Filtreleri sıfırlamayı dene.</p>
+                    </div>
+                }
+                else
+                {
+                <div class="text-[10px] font-mono text-[#b9cbbd]/40 uppercase tracking-widest mb-3">@filteredNews.Count / @newsItems.Count haber gösteriliyor</div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[#282a30]/20 border border-[#282a30]/20">
-                    @foreach (var news in newsItems.OrderByDescending(n => n.Timestamp))
+                    @foreach (var news in filteredNews)
                     {
+                        var isRead = readNewsIds.Contains(news.Id);
                         var impactBgClass = news.Sentiment == "bullish"
                             ? "bg-[#00FFA3] text-[#003920]"
                             : news.Sentiment == "bearish"
@@ -2526,7 +2579,11 @@
                             : "Neutral";
                         var sourceAbbr = news.Symbols.Any() ? news.Symbols.First()[..Math.Min(3, news.Symbols.First().Length)].ToUpper() : "SRC";
 
-                        <div class="bg-[#1e1f26] p-6 hover:bg-[#282a30] transition-colors group cursor-pointer flex flex-col gap-4" @onclick="() => { selectedNewsItem = news; }">
+                        <div class="@(isRead ? "bg-[#15161c] opacity-60" : "bg-[#1e1f26]") p-6 hover:bg-[#282a30] hover:opacity-100 transition-all group cursor-pointer flex flex-col gap-4 relative" @onclick="@(() => OpenNewsItem(news))">
+                            @if (!isRead)
+                            {
+                                <span class="absolute top-2 right-2 w-2 h-2 bg-[#00FFA3] rounded-full" title="Okunmadı"></span>
+                            }
                             <div class="flex justify-between items-start">
                                 <span class="font-mono text-[10px] text-[#b9cbbd]/60">@news.TimeAgo</span>
                                 <div class="flex items-center gap-2">
@@ -2598,6 +2655,7 @@
                         </div>
                     }
                 </div>
+                }
             }
         }
     }
@@ -5250,6 +5308,70 @@
     
     // News State
     private List<NewsItem> newsItems = new List<NewsItem>();
+
+    // News filters + read tracking
+    private string newsSentimentFilter = "ALL";
+    private string newsImpactFilter = "ALL";
+    private string newsSymbolFilter = "";
+    private bool newsShowOnlyUnread = false;
+    private HashSet<int> readNewsIds = new HashSet<int>();
+    private bool readIdsLoaded = false;
+
+    private List<NewsItem> FilterNews(List<NewsItem> src)
+    {
+        IEnumerable<NewsItem> q = src;
+        if (newsSentimentFilter != "ALL")
+            q = q.Where(n => string.Equals(n.Sentiment, newsSentimentFilter, StringComparison.OrdinalIgnoreCase));
+        if (newsImpactFilter != "ALL")
+            q = q.Where(n => string.Equals(n.Impact, newsImpactFilter, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(newsSymbolFilter))
+        {
+            var s = newsSymbolFilter.Trim();
+            q = q.Where(n =>
+                n.Symbols.Any(sy => sy.Contains(s, StringComparison.OrdinalIgnoreCase)) ||
+                n.Title.Contains(s, StringComparison.OrdinalIgnoreCase));
+        }
+        if (newsShowOnlyUnread)
+            q = q.Where(n => !readNewsIds.Contains(n.Id));
+        return q.OrderByDescending(n => n.Timestamp).ToList();
+    }
+
+    private async Task OpenNewsItem(NewsItem n)
+    {
+        selectedNewsItem = n;
+        if (readNewsIds.Add(n.Id))
+            await SaveReadIds();
+    }
+
+    private async Task MarkAllNewsRead()
+    {
+        foreach (var n in newsItems) readNewsIds.Add(n.Id);
+        await SaveReadIds();
+    }
+
+    private async Task LoadReadIds()
+    {
+        try
+        {
+            var json = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "home_read_news");
+            if (!string.IsNullOrEmpty(json))
+            {
+                var arr = System.Text.Json.JsonSerializer.Deserialize<int[]>(json);
+                if (arr != null) readNewsIds = new HashSet<int>(arr);
+            }
+        }
+        catch { }
+    }
+
+    private async Task SaveReadIds()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(readNewsIds.ToArray());
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "home_read_news", json);
+        }
+        catch { }
+    }
     private NewsItem? selectedNewsItem = null;
     
     private class PastOutcome
@@ -5678,6 +5800,16 @@
         await LoadWatchlist();
         RecalcPortfolioTotals();
         _ = LoadRecentNews();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !readIdsLoaded)
+        {
+            await LoadReadIds();
+            readIdsLoaded = true;
+            StateHasChanged();
+        }
     }
     
     // Educational Tooltips Dictionary
