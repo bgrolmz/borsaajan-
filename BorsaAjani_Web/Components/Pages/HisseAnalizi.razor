@@ -146,23 +146,6 @@
                             <span style="color:var(--wf-ink-mute);">Gemini yorumu bekleniyor…</span>
                         }
                     </div>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        <button @onclick="ExecuteBuy" disabled="@isTrading" class="wf-btn success sm">
-                            AL @result.Symbol
-                        </button>
-                        <button @onclick="ExecuteSell" disabled="@isTrading" class="wf-btn danger sm">
-                            SAT
-                        </button>
-                        @if (result.Kelly?.Shares > 0)
-                        {
-                            <button @onclick="UseKellyShares" class="wf-btn sm">
-                                Kelly öneri: @result.Kelly.Shares hisse
-                            </button>
-                        }
-                        <button @onclick="AddToWatchlist" disabled="@isAddingWatch" class="wf-btn sm" title="Watchlist'e ekle">
-                            @(isAddingWatch ? "…" : "☆ Watchlist")
-                        </button>
-                    </div>
                     @if (!string.IsNullOrEmpty(tradeMsg))
                     {
                         <div style="font-family:var(--f-mono); font-size:11px; color:@(tradeSuccess ? "var(--wf-buy)" : "var(--wf-sell)");">
