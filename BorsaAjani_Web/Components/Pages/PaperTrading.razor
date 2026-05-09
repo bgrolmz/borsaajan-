@@ -12,6 +12,7 @@
 @inject NavigationManager Nav
 @inject IHttpClientFactory HttpFactory
 @inject IJSRuntime JS
+@inject ToastService Toasts
 
 <PageTitle>Portföy — Borsa Ajanı</PageTitle>
 
@@ -724,9 +725,17 @@
             simTradeMsg = r.Success
                 ? $"✅ AL {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | Kalan: ${r.CashRemaining:F2}"
                 : $"❌ {r.Error}";
-            if (r.Success) { simSymbol = ""; simShares = 1; tradesLoaded = false; await LoadPortfolio(); }
+            if (r.Success)
+            {
+                Toasts.Success($"AL {r.Shares} {r.Symbol} @ ${r.Price:F2}");
+                simSymbol = ""; simShares = 1; tradesLoaded = false; await LoadPortfolio();
+            }
+            else
+            {
+                Toasts.Error(r.Error ?? "Alım başarısız");
+            }
         }
-        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
+        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; Toasts.Error("Bağlantı hatası"); }
         finally { isSimTrading = false; }
     }
 
@@ -741,9 +750,18 @@
             simTradeMsg = r.Success
                 ? $"✅ SAT {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | PnL: ${r.Pnl:F2}"
                 : $"❌ {r.Error}";
-            if (r.Success) { simSymbol = ""; simShares = 1; tradesLoaded = false; await LoadPortfolio(); }
+            if (r.Success)
+            {
+                var lvl = r.Pnl >= 0 ? ToastLevel.Success : ToastLevel.Warning;
+                Toasts.Show($"SAT {r.Shares} {r.Symbol} @ ${r.Price:F2} | PnL ${r.Pnl:F2}", lvl);
+                simSymbol = ""; simShares = 1; tradesLoaded = false; await LoadPortfolio();
+            }
+            else
+            {
+                Toasts.Error(r.Error ?? "Satım başarısız");
+            }
         }
-        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
+        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; Toasts.Error("Bağlantı hatası"); }
         finally { isSimTrading = false; }
     }
 
@@ -811,13 +829,19 @@
                 : $"❌ {r.Error}";
             if (r.Success)
             {
+                var lvl = r.Pnl >= 0 ? ToastLevel.Success : ToastLevel.Warning;
+                Toasts.Show($"QuickSell {r.Symbol} | PnL ${r.Pnl:F2}", lvl);
                 stops.Remove(symbol);
                 try { await JS.InvokeVoidAsync("localStorage.setItem", "pt_stops", System.Text.Json.JsonSerializer.Serialize(stops)); } catch { }
                 await LoadPortfolio();
                 tradesLoaded = false;
             }
+            else
+            {
+                Toasts.Error(r.Error ?? "QuickSell başarısız");
+            }
         }
-        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
+        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; Toasts.Error("Bağlantı hatası"); }
         finally { isSimTrading = false; }
     }
 
