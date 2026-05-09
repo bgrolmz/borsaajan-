@@ -1,0 +1,27 @@
+@* Reusable skeleton placeholder rows for table-style loading states *@
+
+<div class="space-y-2">
+    @for (var i = 0; i < Count; i++)
+    {
+        <div class="sk-skeleton-row" style="height:@(Height)px;"></div>
+    }
+</div>
+
+<style>
+    .sk-skeleton-row {
+        background: linear-gradient(90deg, var(--wf-paper-light, #f4f1ea) 0%, var(--wf-bg, #faf8f3) 50%, var(--wf-paper-light, #f4f1ea) 100%);
+        background-size: 200% 100%;
+        animation: sk-shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
+        opacity: 0.6;
+    }
+    @@keyframes sk-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+</style>
+
+@code {
+    [Parameter] public int Count { get; set; } = 4;
+    [Parameter] public int Height { get; set; } = 36;
+}
