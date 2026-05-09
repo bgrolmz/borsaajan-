@@ -28,6 +28,7 @@ builder.Services.AddSignalR(hub =>
 // ─── Services ─────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<ChatContextService>();
 builder.Services.AddScoped<FinansalAjanService>();
+builder.Services.AddScoped<ToastService>();
 
 var backendUrl    = "https://borsaajan-production.up.railway.app";
 var backendApiUrl = Environment.GetEnvironmentVariable("BACKEND_API_URL") ?? backendUrl;
