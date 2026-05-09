@@ -7,6 +7,7 @@
 @inject FinansalAjanService Ajan
 @inject NavigationManager Nav
 @inject IHttpClientFactory HttpFactory
+@inject ToastService Toasts
 @using System.Threading
 @implements IDisposable
 
@@ -336,6 +337,7 @@
             {
                 message = $"✓ {sym} watchlist'e eklendi";
                 messageOk = true;
+                Toasts.Success($"{sym} watchlist'e eklendi");
                 newSymbol = "";
                 await LoadWatchlist();
                 await RefreshQuotes();
@@ -344,6 +346,7 @@
             {
                 message = $"✕ {sym} eklenemedi (zaten var olabilir veya geçersiz)";
                 messageOk = false;
+                Toasts.Error($"{sym} eklenemedi — zaten var olabilir");
             }
         }
         finally
@@ -359,12 +362,14 @@
         {
             message = $"✓ {symbol} kaldırıldı";
             messageOk = true;
+            Toasts.Info($"{symbol} watchlist'ten kaldırıldı");
             await LoadWatchlist();
         }
         else
         {
             message = $"✕ {symbol} kaldırılamadı";
             messageOk = false;
+            Toasts.Error($"{symbol} kaldırılamadı");
         }
     }
 
