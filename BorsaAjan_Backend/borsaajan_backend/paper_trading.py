@@ -49,6 +49,12 @@ def init_paper_trading_tables():
                 pnl REAL DEFAULT 0,
                 executed_at TEXT NOT NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_pt_trades_executed_at
+                ON pt_trades(executed_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_pt_trades_symbol_executed
+                ON pt_trades(symbol, executed_at DESC);
         """)
         # Init portfolio with $100k if empty
         row = conn.execute("SELECT COUNT(*) FROM pt_portfolio").fetchone()
