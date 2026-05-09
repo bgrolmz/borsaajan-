@@ -264,6 +264,14 @@ def init_db() -> None:
                 created_at           TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_history_symbol_created
+            ON analysis_history(symbol, created_at DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analysis_history_created
+            ON analysis_history(created_at DESC)
+        """)
 
         # Canonical decision DEEP cache (hash-keyed by symbol + as_of + quick_features_hash)
         cursor.execute("""
