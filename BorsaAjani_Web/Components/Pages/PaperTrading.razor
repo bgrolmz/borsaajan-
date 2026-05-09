@@ -174,6 +174,33 @@
             }
             else
             {
+                @* AL/SAT Trade Form *@
+                <div class="sk-card dashed" style="margin-bottom:14px;">
+                    <div class="sk-card-h"><span class="sk-h-title">⚡ İşlem Yap</span></div>
+                    <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:8px;">
+                        <div>
+                            <span class="sk-tag" style="display:block; margin-bottom:3px;">Sembol</span>
+                            <input @bind="simSymbol" placeholder="AAPL" class="sk-input" style="width:100px; text-transform:uppercase;" />
+                        </div>
+                        <div>
+                            <span class="sk-tag" style="display:block; margin-bottom:3px;">Adet</span>
+                            <input type="number" @bind="simShares" step="0.01" min="0.01" class="sk-input" style="width:90px;" />
+                        </div>
+                        <button @onclick="SimBuy" disabled="@(isSimTrading || string.IsNullOrWhiteSpace(simSymbol))" class="wf-btn primary">
+                            @(isSimTrading ? "…" : "▲ AL")
+                        </button>
+                        <button @onclick="SimSell" disabled="@(isSimTrading || string.IsNullOrWhiteSpace(simSymbol))" class="wf-btn danger">
+                            @(isSimTrading ? "…" : "▼ SAT")
+                        </button>
+                    </div>
+                    @if (!string.IsNullOrEmpty(simTradeMsg))
+                    {
+                        <div style="margin-top:8px; font-family:var(--f-mono); font-size:12px; color:@(simTradeSuccess ? "var(--wf-buy)" : "var(--wf-sell)");">
+                            @simTradeMsg
+                        </div>
+                    }
+                </div>
+
                 <div class="sk-grid-3" style="margin-bottom:14px;">
                     <div class="sk-card">
                         <div class="sk-card-h"><span class="sk-h-title">Toplam Sermaye</span></div>
@@ -197,7 +224,7 @@
                     @if (portfolio.Positions == null || !portfolio.Positions.Any())
                     {
                         <div style="padding:30px 0; text-align:center; font-family:var(--f-hand); color:var(--wf-ink-dim);">
-                            Açık pozisyon yok. Hisse Analizi sayfasından AL/SAT yapabilirsin.
+                            Açık pozisyon yok. Yukarıdan AL/SAT yapabilirsin.
                         </div>
                     }
                     else
@@ -287,6 +314,13 @@
     private string realSymbol = "";
     private double realQty = 1;
     private double realAvgCost = 0;
+
+    // Simüle trade form
+    private string simSymbol = "";
+    private double simShares = 1;
+    private bool isSimTrading = false;
+    private string? simTradeMsg;
+    private bool simTradeSuccess;
 
     private string message = "";
     private bool messageOk = true;
@@ -395,6 +429,40 @@
             }
         }
         catch { message = "✕ Bağlantı hatası"; messageOk = false; }
+    }
+
+    private async Task SimBuy()
+    {
+        if (string.IsNullOrWhiteSpace(simSymbol) || simShares <= 0) return;
+        isSimTrading = true; simTradeMsg = null;
+        try
+        {
+            var r = await Ajan.BuyAsync(simSymbol.Trim().ToUpper(), simShares);
+            simTradeSuccess = r.Success;
+            simTradeMsg = r.Success
+                ? $"✅ AL {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | Kalan: ${r.CashRemaining:F2}"
+                : $"❌ {r.Error}";
+            if (r.Success) { simSymbol = ""; simShares = 1; await LoadPortfolio(); }
+        }
+        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
+        finally { isSimTrading = false; }
+    }
+
+    private async Task SimSell()
+    {
+        if (string.IsNullOrWhiteSpace(simSymbol) || simShares <= 0) return;
+        isSimTrading = true; simTradeMsg = null;
+        try
+        {
+            var r = await Ajan.SellAsync(simSymbol.Trim().ToUpper(), simShares);
+            simTradeSuccess = r.Success;
+            simTradeMsg = r.Success
+                ? $"✅ SAT {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | PnL: ${r.Pnl:F2}"
+                : $"❌ {r.Error}";
+            if (r.Success) { simSymbol = ""; simShares = 1; await LoadPortfolio(); }
+        }
+        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
+        finally { isSimTrading = false; }
     }
 
     private async Task ResetPortfolio()

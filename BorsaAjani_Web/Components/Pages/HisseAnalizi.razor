@@ -444,50 +444,6 @@
                 </div>
             </div>
 
-            @* ── Paper Trade Panel ── *@
-            <div class="sk-card thick" style="border-color:var(--wf-info); background:var(--wf-info-soft); margin-bottom:14px;">
-                <div class="sk-card-h">
-                    <span class="sk-h-title">Paper Trading</span>
-                    <span class="sk-h-meta">simüle pozisyon</span>
-                </div>
-                @if (portfolio != null)
-                {
-                    <div class="sk-grid-3" style="margin-bottom:12px; gap:8px;">
-                        <div style="display:flex; flex-direction:column; gap:2px;">
-                            <span class="sk-tag">Nakit</span>
-                            <span class="sk-num sk-num-md">$@portfolio.Cash.ToString("F2")</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:2px;">
-                            <span class="sk-tag">Pozisyon</span>
-                            <span class="sk-num sk-num-md">$@portfolio.PositionsValue.ToString("F2")</span>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:2px;">
-                            <span class="sk-tag">Toplam Sermaye</span>
-                            <span class="sk-num sk-num-md" style="color:var(--wf-mentor);">$@portfolio.TotalEquity.ToString("F2")</span>
-                        </div>
-                    </div>
-                }
-                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-                    <div>
-                        <span class="sk-tag" style="display:block; margin-bottom:3px;">Adet</span>
-                        <input type="number" @bind="tradeShares" min="1" step="1" class="sk-input" style="width:80px;" />
-                    </div>
-                    <button @onclick="ExecuteBuy" disabled="@isTrading" class="wf-btn success">AL @result.Symbol</button>
-                    <button @onclick="ExecuteSell" disabled="@isTrading" class="wf-btn danger">SAT</button>
-                    @if (result.Kelly?.Shares > 0)
-                    {
-                        <button @onclick="UseKellyShares" class="wf-btn sm">
-                            Kelly: @result.Kelly.Shares lot
-                        </button>
-                    }
-                </div>
-                @if (!string.IsNullOrEmpty(tradeMsg))
-                {
-                    <div style="margin-top:8px; font-family:var(--f-mono); font-size:11px; color:@(tradeSuccess ? "var(--wf-buy)" : "var(--wf-sell)");">
-                        @tradeMsg
-                    </div>
-                }
-            </div>
         }
         else if (!isLoading)
         {
@@ -693,6 +649,43 @@
 
         isLoading = false;
         StateHasChanged();
+
+        if (result != null && result.Success && string.IsNullOrEmpty(result.AiCommentary))
+            _ = GenerateAiCommentaryAsync();
+    }
+
+    private async Task GenerateAiCommentaryAsync()
+    {
+        if (result == null) return;
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var posteriorPct = (int)Math.Round((result.Probability?.AfterNews ?? result.Probability?.Initial ?? 0.5) * 100);
+            var prompt = $"{result.Symbol} hissesi için kapsamlı Türkçe yatırım yorumu yaz. Karar: {result.Verdict}, EV: ${result.Ev?.Value:F2}, Kelly çeyrek: %{result.Kelly?.QuarterPct:F1}, Bayes posterior: %{posteriorPct}. Boğa/Ayı dengesini, riskleri ve fırsat penceresini açıkla. 3-4 paragraf, kısa ve net.";
+            var body = new
+            {
+                user_message = prompt,
+                context_data = new Dictionary<string, object>
+                {
+                    ["symbol"] = result.Symbol ?? "",
+                    ["decision"] = result.Verdict ?? "",
+                    ["ev"] = result.Ev?.Value ?? 0,
+                    ["kelly_pct"] = result.Kelly?.QuarterPct ?? 0
+                }
+            };
+            var resp = await client.PostAsJsonAsync("/mentor/chat", body);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("reply", out var r) && r.ValueKind == JsonValueKind.String)
+                {
+                    result.AiCommentary = r.GetString() ?? "";
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch { }
     }
 
     private async Task RefreshPortfolio()
