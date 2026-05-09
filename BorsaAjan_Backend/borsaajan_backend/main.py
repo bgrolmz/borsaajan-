@@ -938,6 +938,53 @@ def portfolio_list():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/portfolio/values")
+def portfolio_values():
+    """Real portfolio with live prices, PnL, and weights."""
+    try:
+        from .paper_trading import get_current_price
+        portfolio = get_portfolio()
+        items = []
+        total_cost = 0.0
+        total_value = 0.0
+        for p in portfolio:
+            sym = p.get("symbol", "")
+            qty = float(p.get("quantity") or 0)
+            avg = float(p.get("avg_cost") or 0)
+            price = get_current_price(sym) or avg
+            cost = qty * avg
+            value = qty * price
+            pnl = value - cost
+            pnl_pct = (pnl / cost * 100.0) if cost > 0 else 0.0
+            total_cost += cost
+            total_value += value
+            items.append({
+                "symbol": sym,
+                "quantity": qty,
+                "avg_cost": round(avg, 4),
+                "current_price": round(price, 4),
+                "cost": round(cost, 2),
+                "value": round(value, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round(pnl_pct, 2),
+                "weight_pct": 0.0,
+                "updated_at": p.get("updated_at"),
+            })
+        for it in items:
+            it["weight_pct"] = round((it["value"] / total_value * 100.0) if total_value > 0 else 0.0, 2)
+        total_pnl = total_value - total_cost
+        return {
+            "success": True,
+            "items": items,
+            "total_cost": round(total_cost, 2),
+            "total_value": round(total_value, 2),
+            "total_pnl": round(total_pnl, 2),
+            "total_pnl_pct": round((total_pnl / total_cost * 100.0) if total_cost > 0 else 0.0, 2),
+            "count": len(items),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/portfolio/analyze")
 def portfolio_analyze(mode: str = "quick", force_deep: int = 0, detail: str = "detailed"):
     """

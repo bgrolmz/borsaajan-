@@ -6,6 +6,8 @@
 @using System.Net.Http
 @using System.Net.Http.Json
 @using System.Text.Json
+@using System.IO
+@using Microsoft.AspNetCore.Components.Forms
 @inject FinansalAjanService Ajan
 @inject NavigationManager Nav
 @inject IHttpClientFactory HttpFactory
@@ -73,9 +75,19 @@
            ══════════════════════════════════════════════ *@
         @if (activeTab == "gercek")
         {
-            @* Add form *@
+            @* Add form + Import/Export *@
             <div class="sk-card dashed" style="margin-bottom:14px;">
-                <div class="sk-card-h"><span class="sk-h-title">Pozisyon Ekle</span></div>
+                <div class="sk-card-h">
+                    <span class="sk-h-title">Pozisyon Ekle</span>
+                    <span style="margin-left:auto; display:flex; gap:6px;">
+                        <button @onclick="LoadRealPortfolio" disabled="@isRealLoading" class="wf-btn xs">↻</button>
+                        <button @onclick="ExportCsv" disabled="@(!realItems.Any())" class="wf-btn xs" title="CSV indir">⬇ CSV</button>
+                        <label class="wf-btn xs" style="cursor:pointer; margin:0;" title="CSV içe aktar">
+                            ⬆ CSV
+                            <InputFile OnChange="OnCsvFileSelected" accept=".csv" style="display:none;" />
+                        </label>
+                    </span>
+                </div>
                 <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:8px;">
                     <div>
                         <span class="sk-tag" style="display:block; margin-bottom:3px;">Sembol</span>
@@ -93,6 +105,12 @@
                         @(isRealAdding ? "Ekleniyor…" : "+ Ekle")
                     </button>
                 </div>
+                @if (!string.IsNullOrEmpty(realImportMsg))
+                {
+                    <div style="margin-top:8px; font-family:var(--f-mono); font-size:12px; color:@(realImportOk ? "var(--wf-buy)" : "var(--wf-sell)");">
+                        @realImportMsg
+                    </div>
+                }
             </div>
 
             @if (isRealLoading)
@@ -110,25 +128,28 @@
             else
             {
                 @* Summary *@
+                var totalPnlColor = realTotalPnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
                 <div class="sk-grid-3" style="margin-bottom:14px;">
                     <div class="sk-card">
-                        <div class="sk-card-h"><span class="sk-h-title">Toplam Maliyet</span></div>
-                        <span class="sk-num sk-num-xl">$@realItems.Sum(x => x.Quantity * x.AvgCost).ToString("F2")</span>
+                        <div class="sk-card-h"><span class="sk-h-title">Toplam Değer</span></div>
+                        <span class="sk-num sk-num-xl">$@realTotalValue.ToString("F2")</span>
+                        <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">Maliyet: $@realTotalCost.ToString("F2")</div>
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Toplam P&amp;L</span></div>
+                        <span class="sk-num sk-num-xl" style="color:@totalPnlColor;">@(realTotalPnl >= 0 ? "+" : "")$@realTotalPnl.ToString("F2")</span>
+                        <div style="font-family:var(--f-mono); font-size:11px; color:@totalPnlColor;">@(realTotalPnlPct >= 0 ? "+" : "")@realTotalPnlPct.ToString("F2")%</div>
                     </div>
                     <div class="sk-card">
                         <div class="sk-card-h"><span class="sk-h-title">Sembol Sayısı</span></div>
                         <span class="sk-num sk-num-xl">@realItems.Count</span>
-                    </div>
-                    <div class="sk-card">
-                        <div class="sk-card-h"><span class="sk-h-title">Son Güncelleme</span></div>
-                        <span class="sk-num sk-num-sm" style="font-size:12px; color:var(--wf-ink-mute);">@(realItems.Max(x => x.UpdatedAt)?[..Math.Min(10, realItems.Max(x => x.UpdatedAt)?.Length ?? 0)] ?? "—")</span>
                     </div>
                 </div>
 
                 <div class="sk-card">
                     <div class="sk-card-h">
                         <span class="sk-h-title">Pozisyonlar</span>
-                        <span class="sk-h-meta">@realItems.Count adet</span>
+                        <span class="sk-h-meta">@realItems.Count adet · canlı fiyat</span>
                     </div>
                     <table style="width:100%; border-collapse:collapse;">
                         <thead>
@@ -136,20 +157,38 @@
                                 <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
                                 <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Adet</th>
                                 <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Ort. Maliyet</th>
-                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Toplam Maliyet</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Şu An</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Değer</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">P&amp;L</th>
+                                <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase; min-width:120px;">Ağırlık</th>
                                 <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var item in realItems)
+                            @foreach (var item in realItems.OrderByDescending(x => x.Value))
                             {
+                                var pColor = item.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
+                                var wColor = item.WeightPct >= 30 ? "var(--wf-sell)" : item.WeightPct >= 15 ? "var(--wf-acc)" : "var(--wf-buy)";
                                 <tr style="border-bottom:1px dashed var(--wf-border);">
                                     <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@item.Symbol</td>
                                     <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@item.Quantity.ToString("F4")</td>
                                     <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@item.AvgCost.ToString("F2")</td>
-                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px; color:var(--wf-ink);">$@((item.Quantity * item.AvgCost).ToString("F2"))</td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@item.CurrentPrice.ToString("F2")</td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@item.Value.ToString("F2")</td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px; color:@pColor; font-weight:600;">
+                                        @(item.Pnl >= 0 ? "+" : "")$@item.Pnl.ToString("F2")
+                                        <div style="font-size:10px;">(@(item.PnlPct >= 0 ? "+" : "")@item.PnlPct.ToString("F2")%)</div>
+                                    </td>
+                                    <td style="padding:10px 4px;">
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            <div style="flex:1; height:8px; background:var(--wf-border); border-radius:2px; overflow:hidden; min-width:60px;">
+                                                <div style="height:100%; width:@(Math.Min(100,item.WeightPct).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))%; background:@wColor;"></div>
+                                            </div>
+                                            <span style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); min-width:42px; text-align:right;">@item.WeightPct.ToString("F1")%</span>
+                                        </div>
+                                    </td>
                                     <td style="padding:10px 4px; text-align:right;">
-                                        <a href="/hisse-analizi/@item.Symbol" class="wf-btn xs">▶ Analiz</a>
+                                        <a href="/hisse-analizi/@item.Symbol" class="wf-btn xs">▶</a>
                                         <button @onclick="@(() => RemoveRealPosition(item.Symbol))" class="wf-btn xs danger">✕</button>
                                     </td>
                                 </tr>
@@ -486,8 +525,21 @@
         public string Symbol { get; set; } = "";
         public double Quantity { get; set; }
         public double AvgCost { get; set; }
+        public double CurrentPrice { get; set; }
+        public double Cost { get; set; }
+        public double Value { get; set; }
+        public double Pnl { get; set; }
+        public double PnlPct { get; set; }
+        public double WeightPct { get; set; }
         public string? UpdatedAt { get; set; }
     }
+
+    private double realTotalCost;
+    private double realTotalValue;
+    private double realTotalPnl;
+    private double realTotalPnlPct;
+    private string? realImportMsg;
+    private bool realImportOk;
 
     protected override async Task OnInitializedAsync()
     {
@@ -507,14 +559,15 @@
         try
         {
             var client = HttpFactory.CreateClient("BackendApi");
-            var resp = await client.GetAsync("/portfolio/list");
+            var resp = await client.GetAsync("/portfolio/values");
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("portfolio", out var arr))
+                var root = doc.RootElement;
+                realItems.Clear();
+                if (root.TryGetProperty("items", out var arr))
                 {
-                    realItems.Clear();
                     foreach (var el in arr.EnumerateArray())
                     {
                         realItems.Add(new RealPortfolioItem
@@ -522,14 +575,87 @@
                             Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() ?? "" : "",
                             Quantity = el.TryGetProperty("quantity", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetDouble() : 0,
                             AvgCost = el.TryGetProperty("avg_cost", out var c) && c.ValueKind == JsonValueKind.Number ? c.GetDouble() : 0,
+                            CurrentPrice = el.TryGetProperty("current_price", out var cp) && cp.ValueKind == JsonValueKind.Number ? cp.GetDouble() : 0,
+                            Cost = el.TryGetProperty("cost", out var co) && co.ValueKind == JsonValueKind.Number ? co.GetDouble() : 0,
+                            Value = el.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0,
+                            Pnl = el.TryGetProperty("pnl", out var pn) && pn.ValueKind == JsonValueKind.Number ? pn.GetDouble() : 0,
+                            PnlPct = el.TryGetProperty("pnl_pct", out var pp) && pp.ValueKind == JsonValueKind.Number ? pp.GetDouble() : 0,
+                            WeightPct = el.TryGetProperty("weight_pct", out var w) && w.ValueKind == JsonValueKind.Number ? w.GetDouble() : 0,
                             UpdatedAt = el.TryGetProperty("updated_at", out var u) ? u.GetString() : null,
                         });
                     }
                 }
+                realTotalCost = root.TryGetProperty("total_cost", out var tc) && tc.ValueKind == JsonValueKind.Number ? tc.GetDouble() : 0;
+                realTotalValue = root.TryGetProperty("total_value", out var tv) && tv.ValueKind == JsonValueKind.Number ? tv.GetDouble() : 0;
+                realTotalPnl = root.TryGetProperty("total_pnl", out var tp) && tp.ValueKind == JsonValueKind.Number ? tp.GetDouble() : 0;
+                realTotalPnlPct = root.TryGetProperty("total_pnl_pct", out var tpp) && tpp.ValueKind == JsonValueKind.Number ? tpp.GetDouble() : 0;
             }
         }
         catch { }
         finally { isRealLoading = false; }
+    }
+
+    private async Task ExportCsv()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("symbol,quantity,avg_cost");
+        foreach (var it in realItems)
+        {
+            sb.AppendLine($"{it.Symbol},{it.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture)},{it.AvgCost.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+        var stamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
+        var fname = $"portfolio_{stamp}.csv";
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $@"
+                (function(){{
+                    var blob = new Blob([{System.Text.Json.JsonSerializer.Serialize(sb.ToString())}], {{type:'text/csv'}});
+                    var url = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url; a.download = '{fname}';
+                    document.body.appendChild(a); a.click();
+                    setTimeout(function(){{ URL.revokeObjectURL(url); a.remove(); }}, 100);
+                }})();");
+        }
+        catch (Exception ex) { realImportMsg = "✕ Export hatası: " + ex.Message; realImportOk = false; }
+    }
+
+    private async Task OnCsvFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+            using var stream = file.OpenReadStream(2 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            int added = 0, skipped = 0;
+            var client = HttpFactory.CreateClient("BackendApi");
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim().Trim('\r');
+                if (string.IsNullOrEmpty(line)) continue;
+                if (i == 0 && line.ToLower().Contains("symbol")) continue;
+                var parts = line.Split(',');
+                if (parts.Length < 3) { skipped++; continue; }
+                var sym = parts[0].Trim().ToUpper();
+                if (!double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var qty)) { skipped++; continue; }
+                if (!double.TryParse(parts[2].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var avg)) { skipped++; continue; }
+                if (string.IsNullOrEmpty(sym) || qty <= 0 || avg <= 0) { skipped++; continue; }
+                var body = new { symbol = sym, avg_cost = avg, quantity = qty };
+                var resp = await client.PostAsJsonAsync("/portfolio/add", body);
+                if (resp.IsSuccessStatusCode) added++; else skipped++;
+            }
+            realImportMsg = $"✓ {added} eklendi · {skipped} atlandı";
+            realImportOk = added > 0;
+            await LoadRealPortfolio();
+        }
+        catch (Exception ex)
+        {
+            realImportMsg = "✕ Import hatası: " + ex.Message;
+            realImportOk = false;
+        }
     }
 
     private async Task AddRealPosition()
