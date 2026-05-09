@@ -660,18 +660,12 @@
         try
         {
             var client = HttpFactory.CreateClient("BackendApi");
-            var posteriorPct = (int)Math.Round((result.Probability?.AfterNews ?? result.Probability?.Initial ?? 0.5) * 100);
-            var prompt = $"{result.Symbol} hissesi için kapsamlı Türkçe yatırım yorumu yaz. Karar: {result.Verdict}, EV: ${result.Ev?.Value:F2}, Kelly çeyrek: %{result.Kelly?.QuarterPct:F1}, Bayes posterior: %{posteriorPct}. Boğa/Ayı dengesini, riskleri ve fırsat penceresini açıkla. 3-4 paragraf, kısa ve net.";
+            var prompt = $"{result.Symbol} için broker yorumu yaz. Boğa/Ayı dengesi, NET pozisyon tavsiyesi (giriş/stop/hedef seviye), risk/fırsat. 3-4 kısa paragraf, sayılarla konuş.";
             var body = new
             {
                 user_message = prompt,
-                context_data = new Dictionary<string, object>
-                {
-                    ["symbol"] = result.Symbol ?? "",
-                    ["decision"] = result.Verdict ?? "",
-                    ["ev"] = result.Ev?.Value ?? 0,
-                    ["kelly_pct"] = result.Kelly?.QuarterPct ?? 0
-                }
+                context_data = BuildMentorContext(),
+                history = new object[] { }
             };
             var resp = await client.PostAsJsonAsync("/mentor/chat", body);
             if (resp.IsSuccessStatusCode)
@@ -766,6 +760,52 @@
         await SendMentorMessage();
     }
 
+    private Dictionary<string, object> BuildMentorContext()
+    {
+        var ctx = new Dictionary<string, object>();
+        if (result == null || !result.Success) return ctx;
+        ctx["symbol"] = result.Symbol ?? "";
+        if (!string.IsNullOrEmpty(result.Name)) ctx["name"] = result.Name;
+        if (!string.IsNullOrEmpty(result.Sector)) ctx["sector"] = result.Sector;
+        if (result.Price.HasValue) ctx["price"] = result.Price.Value;
+        if (result.ChangePct.HasValue) ctx["change_pct"] = result.ChangePct.Value;
+        ctx["decision"] = result.Verdict ?? "";
+        if (!string.IsNullOrEmpty(result.Confidence)) ctx["confidence"] = result.Confidence;
+        if (result.Ev != null) { ctx["ev"] = result.Ev.Value; ctx["roi_pct"] = result.Ev.RoiPct; }
+        if (result.Kelly != null)
+        {
+            ctx["kelly_pct"] = result.Kelly.QuarterPct;
+            ctx["kelly_shares"] = result.Kelly.Shares;
+            ctx["kelly_dollar"] = result.Kelly.DollarAmount;
+        }
+        if (result.Probability != null)
+        {
+            ctx["bayes_posterior"] = (int)Math.Round((result.Probability.AfterNews ?? result.Probability.Initial ?? 0.5) * 100);
+            ctx["bayes_prior"] = (int)Math.Round((result.Probability.Initial ?? 0.5) * 100);
+        }
+        if (result.Targets != null)
+        {
+            ctx["entry"] = result.Targets.Entry;
+            ctx["target"] = result.Targets.Target;
+            ctx["stop"] = result.Targets.StopLoss;
+        }
+        if (result.Fundamentals?.PeRatio.HasValue == true) ctx["pe_ratio"] = result.Fundamentals.PeRatio.Value;
+        if (result.AnalystTarget.HasValue) ctx["analyst_target"] = result.AnalystTarget.Value;
+        if (result.AnalystCount.HasValue) ctx["analyst_count"] = result.AnalystCount.Value;
+        if (result.NewsEnriched != null && result.NewsEnriched.Any())
+        {
+            ctx["news"] = result.NewsEnriched.Take(5).Select(n => new Dictionary<string, object>
+            {
+                ["title"] = n.Title ?? "",
+                ["summary_tr"] = n.SummaryTr ?? "",
+                ["sentiment"] = n.Sentiment ?? "nötr"
+            }).ToList();
+        }
+        if (result.BullBear?.BullThesis != null) ctx["bull_thesis"] = result.BullBear.BullThesis;
+        if (result.BullBear?.BearThesis != null) ctx["bear_thesis"] = result.BullBear.BearThesis;
+        return ctx;
+    }
+
     private async Task SendMentorMessage()
     {
         var question = mentorInput.Trim();
@@ -777,15 +817,13 @@
         try
         {
             var client = HttpFactory.CreateClient("BackendApi");
-            var contextData = new Dictionary<string, object>();
-            if (result != null && result.Success)
-            {
-                contextData["symbol"] = result.Symbol ?? "";
-                contextData["decision"] = result.Verdict ?? "";
-                contextData["ev"] = result.Ev?.Value ?? 0;
-                contextData["kelly_pct"] = result.Kelly?.QuarterPct ?? 0;
-            }
-            var body = new { user_message = question, context_data = contextData };
+            var contextData = BuildMentorContext();
+            var history = mentorMessages
+                .Take(mentorMessages.Count - 1)
+                .TakeLast(8)
+                .Select(m => new { role = m.IsUser ? "user" : "assistant", text = m.Text })
+                .ToList();
+            var body = new { user_message = question, context_data = contextData, history };
             var resp = await client.PostAsJsonAsync("/mentor/chat", body);
             if (resp.IsSuccessStatusCode)
             {
