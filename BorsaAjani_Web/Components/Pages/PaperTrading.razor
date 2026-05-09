@@ -9,6 +9,7 @@
 @inject FinansalAjanService Ajan
 @inject NavigationManager Nav
 @inject IHttpClientFactory HttpFactory
+@inject IJSRuntime JS
 
 <PageTitle>Portföy — Borsa Ajanı</PageTitle>
 
@@ -51,6 +52,12 @@
                            color:@(activeTab=="simule" ? "var(--wf-acc)" : "var(--wf-ink-mute)");
                            border-bottom:2px solid @(activeTab=="simule" ? "var(--wf-acc)" : "transparent"); margin-bottom:-2px;">
                 ▣ Simüle
+            </button>
+            <button @onclick='() => SwitchToHistory()'
+                    style="padding:8px 20px; font-family:var(--f-hand); font-size:14px; font-weight:600; border:none; background:transparent; cursor:pointer;
+                           color:@(activeTab=="history" ? "var(--wf-ink)" : "var(--wf-ink-mute)");
+                           border-bottom:2px solid @(activeTab=="history" ? "var(--wf-ink)" : "transparent"); margin-bottom:-2px;">
+                📜 Geçmiş İşlemler
             </button>
         </div>
 
@@ -238,6 +245,7 @@
                                     <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Şu An</th>
                                     <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Değer</th>
                                     <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">P&amp;L</th>
+                                    <th style="text-align:center; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">SL / TP</th>
                                     <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
                                 </tr>
                             </thead>
@@ -245,8 +253,17 @@
                                 @foreach (var p in portfolio.Positions)
                                 {
                                     var pnlColor = p.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
-                                    <tr style="border-bottom:1px dashed var(--wf-border);">
-                                        <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@p.Symbol</td>
+                                    var sym = p.Symbol ?? "";
+                                    var st = stops.TryGetValue(sym, out var v) ? v : new StopThreshold();
+                                    bool slHit = st.SL > 0 && p.CurrentPrice <= st.SL;
+                                    bool tpHit = st.TP > 0 && p.CurrentPrice >= st.TP;
+                                    string rowBg = slHit ? "background:var(--wf-sell-soft);" : tpHit ? "background:var(--wf-buy-soft);" : "";
+                                    <tr style="border-bottom:1px dashed var(--wf-border); @rowBg">
+                                        <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">
+                                            @p.Symbol
+                                            @if (slHit) { <span style="margin-left:6px; font-size:11px; color:var(--wf-sell);">🛑 STOP</span> }
+                                            else if (tpHit) { <span style="margin-left:6px; font-size:11px; color:var(--wf-buy);">🎯 TAKE</span> }
+                                        </td>
                                         <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@p.Shares.ToString("F2")</td>
                                         <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.AvgCost.ToString("F2")</td>
                                         <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.CurrentPrice.ToString("F2")</td>
@@ -255,14 +272,138 @@
                                             @(p.Pnl >= 0 ? "+" : "")$@p.Pnl.ToString("F2")
                                             <div style="font-size:10px;">(@(p.PnlPct >= 0 ? "+" : "")%@p.PnlPct.ToString("F2"))</div>
                                         </td>
+                                        <td style="padding:6px 4px; text-align:center;">
+                                            <div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
+                                                <input type="number" step="0.01" min="0" value="@(st.SL > 0 ? st.SL.ToString("F2") : "")"
+                                                       @onchange="@(async (e) => await SetStop(sym, "sl", e.Value?.ToString()))"
+                                                       placeholder="SL" class="sk-input" style="width:70px; font-size:11px; padding:2px 4px; border-color:var(--wf-sell);" />
+                                                <input type="number" step="0.01" min="0" value="@(st.TP > 0 ? st.TP.ToString("F2") : "")"
+                                                       @onchange="@(async (e) => await SetStop(sym, "tp", e.Value?.ToString()))"
+                                                       placeholder="TP" class="sk-input" style="width:70px; font-size:11px; padding:2px 4px; border-color:var(--wf-buy);" />
+                                            </div>
+                                        </td>
                                         <td style="padding:10px 4px; text-align:right;">
                                             <a href="/hisse-analizi/@p.Symbol" class="wf-btn xs">▶</a>
+                                            @if (slHit || tpHit)
+                                            {
+                                                <button @onclick="@(() => QuickSell(sym, p.Shares))" disabled="@isSimTrading" class="wf-btn xs danger" title="Tüm pozisyonu sat">SAT</button>
+                                            }
                                         </td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     }
+                </div>
+            }
+        }
+
+        @* ══════════════════════════════════════════════
+           İŞLEM GEÇMİŞİ TAB
+           ══════════════════════════════════════════════ *@
+        @if (activeTab == "history")
+        {
+            @if (isTradesLoading)
+            {
+                <div style="text-align:center; padding:40px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">⏳ Yükleniyor…</div>
+            }
+            else if (!trades.Any())
+            {
+                <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
+                    <div style="font-size:38px; opacity:0.3;">📜</div>
+                    <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim);">Henüz işlem yok</div>
+                    <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); margin-top:6px;">Simüle tabında AL/SAT yap</div>
+                </div>
+            }
+            else
+            {
+                var buys = trades.Count(t => t.Action == "BUY");
+                    var sells = trades.Count(t => t.Action == "SELL");
+                    var realizedPnl = trades.Where(t => t.Action == "SELL").Sum(t => t.Pnl);
+                    var winning = trades.Where(t => t.Action == "SELL" && t.Pnl > 0).Count();
+                    var losing = trades.Where(t => t.Action == "SELL" && t.Pnl < 0).Count();
+                    var winRate = (winning + losing) > 0 ? (double)winning / (winning + losing) * 100 : 0;
+                    var pnlColor = realizedPnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
+
+                    var sellTrades = trades.Where(t => t.Action == "SELL").OrderBy(t => t.ExecutedAt).ToList();
+                    double cum = 0;
+                    var cumPoints = sellTrades.Select(t => { cum += t.Pnl; return cum; }).ToList();
+
+                <div class="sk-grid-3" style="margin-bottom:14px;">
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Toplam İşlem</span></div>
+                        <span class="sk-num sk-num-xl">@trades.Count</span>
+                        <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@buys AL · @sells SAT</div>
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Realized P&amp;L</span></div>
+                        <span class="sk-num sk-num-xl" style="color:@pnlColor;">@(realizedPnl >= 0 ? "+" : "")$@realizedPnl.ToString("F2")</span>
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Win Rate</span></div>
+                        <span class="sk-num sk-num-xl">@winRate.ToString("F1")%</span>
+                        <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@winning W · @losing L</div>
+                    </div>
+                </div>
+
+                @if (cumPoints.Count >= 2)
+                {
+                    <div class="sk-card" style="margin-bottom:14px;">
+                        <div class="sk-card-h"><span class="sk-h-title">Kümülatif Realized P&amp;L</span><span class="sk-h-meta">@cumPoints.Count satış</span></div>
+                        @{
+                            var w = 600.0; var h = 80.0; var pad = 4.0;
+                            var minV = Math.Min(0, cumPoints.Min());
+                            var maxV = Math.Max(0, cumPoints.Max());
+                            var rng = maxV - minV; if (rng == 0) rng = 1;
+                            var step = (w - 2 * pad) / Math.Max(1, cumPoints.Count - 1);
+                            var pts = string.Join(" ", cumPoints.Select((v, i) => $"{(pad + i * step).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)},{(h - pad - (v - minV) / rng * (h - 2 * pad)).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}"));
+                            var zeroY = h - pad - (0 - minV) / rng * (h - 2 * pad);
+                            var lineColor = cumPoints.Last() >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
+                        }
+                        <svg viewBox="0 0 @w.ToString("F0") @h.ToString("F0")" style="width:100%; height:80px; display:block;">
+                            <line x1="0" y1="@zeroY.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)" x2="@w.ToString("F0")" y2="@zeroY.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)" stroke="var(--wf-border)" stroke-dasharray="3,3" stroke-width="1" />
+                            <polyline fill="none" stroke="@lineColor" stroke-width="2" points="@pts" />
+                        </svg>
+                    </div>
+                }
+
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">İşlemler</span>
+                        <span class="sk-h-meta">en yeni → en eski</span>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--wf-border);">
+                                <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Zaman</th>
+                                <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
+                                <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Adet</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Toplam</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">P&amp;L</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in trades)
+                            {
+                                var isBuy = t.Action == "BUY";
+                                var actColor = isBuy ? "var(--wf-buy)" : "var(--wf-sell)";
+                                var pColor = t.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
+                                <tr style="border-bottom:1px dashed var(--wf-border);">
+                                    <td style="padding:8px 4px; font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@FormatTime(t.ExecutedAt)</td>
+                                    <td style="padding:8px 4px; font-family:var(--f-hand); font-size:14px; font-weight:600;">@t.Symbol</td>
+                                    <td style="padding:8px 4px; font-family:var(--f-mono); font-size:11px; font-weight:700; color:@actColor;">@(isBuy ? "▲ AL" : "▼ SAT")</td>
+                                    <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@t.Shares.ToString("F2")</td>
+                                    <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@t.Price.ToString("F2")</td>
+                                    <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@t.Total.ToString("F2")</td>
+                                    <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px; color:@(isBuy ? "var(--wf-ink-mute)" : pColor); font-weight:600;">
+                                        @(isBuy ? "—" : (t.Pnl >= 0 ? "+" : "") + "$" + t.Pnl.ToString("F2"))
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
             }
         }
@@ -322,8 +463,23 @@
     private string? simTradeMsg;
     private bool simTradeSuccess;
 
+    // Trade history
+    private List<PaperTrade> trades = new();
+    private bool isTradesLoading = false;
+    private bool tradesLoaded = false;
+
+    // SL/TP per symbol
+    private Dictionary<string, StopThreshold> stops = new();
+    private bool stopsLoaded = false;
+
     private string message = "";
     private bool messageOk = true;
+
+    private class StopThreshold
+    {
+        public double SL { get; set; }
+        public double TP { get; set; }
+    }
 
     private class RealPortfolioItem
     {
@@ -442,7 +598,7 @@
             simTradeMsg = r.Success
                 ? $"✅ AL {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | Kalan: ${r.CashRemaining:F2}"
                 : $"❌ {r.Error}";
-            if (r.Success) { simSymbol = ""; simShares = 1; await LoadPortfolio(); }
+            if (r.Success) { simSymbol = ""; simShares = 1; tradesLoaded = false; await LoadPortfolio(); }
         }
         catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
         finally { isSimTrading = false; }
@@ -459,7 +615,81 @@
             simTradeMsg = r.Success
                 ? $"✅ SAT {r.Shares} {r.Symbol} @ ${r.Price:F2} = ${r.Total:F2} | PnL: ${r.Pnl:F2}"
                 : $"❌ {r.Error}";
-            if (r.Success) { simSymbol = ""; simShares = 1; await LoadPortfolio(); }
+            if (r.Success) { simSymbol = ""; simShares = 1; tradesLoaded = false; await LoadPortfolio(); }
+        }
+        catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
+        finally { isSimTrading = false; }
+    }
+
+    private async Task SwitchToHistory()
+    {
+        activeTab = "history";
+        if (!tradesLoaded) await LoadTrades();
+    }
+
+    private async Task LoadTrades()
+    {
+        isTradesLoading = true;
+        try { trades = await Ajan.GetTradesAsync(200); }
+        finally { isTradesLoading = false; tradesLoaded = true; }
+    }
+
+    private static string FormatTime(string? iso)
+    {
+        if (string.IsNullOrEmpty(iso)) return "—";
+        if (DateTime.TryParse(iso, null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var dt))
+            return dt.ToLocalTime().ToString("MM-dd HH:mm");
+        return iso.Length >= 16 ? iso.Substring(0, 16).Replace("T", " ") : iso;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !stopsLoaded)
+        {
+            try
+            {
+                var json = await JS.InvokeAsync<string?>("localStorage.getItem", "pt_stops");
+                if (!string.IsNullOrEmpty(json))
+                    stops = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, StopThreshold>>(json) ?? new();
+            }
+            catch { }
+            stopsLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SetStop(string symbol, string kind, string? raw)
+    {
+        if (!stops.TryGetValue(symbol, out var st)) { st = new StopThreshold(); stops[symbol] = st; }
+        double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v);
+        if (kind == "sl") st.SL = v; else if (kind == "tp") st.TP = v;
+        if (st.SL <= 0 && st.TP <= 0) stops.Remove(symbol);
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(stops);
+            await JS.InvokeVoidAsync("localStorage.setItem", "pt_stops", json);
+        }
+        catch { }
+    }
+
+    private async Task QuickSell(string symbol, double shares)
+    {
+        if (string.IsNullOrWhiteSpace(symbol) || shares <= 0) return;
+        isSimTrading = true; simTradeMsg = null;
+        try
+        {
+            var r = await Ajan.SellAsync(symbol, shares);
+            simTradeSuccess = r.Success;
+            simTradeMsg = r.Success
+                ? $"✅ SAT {r.Shares} {r.Symbol} @ ${r.Price:F2} | PnL: ${r.Pnl:F2}"
+                : $"❌ {r.Error}";
+            if (r.Success)
+            {
+                stops.Remove(symbol);
+                try { await JS.InvokeVoidAsync("localStorage.setItem", "pt_stops", System.Text.Json.JsonSerializer.Serialize(stops)); } catch { }
+                await LoadPortfolio();
+                tradesLoaded = false;
+            }
         }
         catch { simTradeMsg = "❌ Bağlantı hatası"; simTradeSuccess = false; }
         finally { isSimTrading = false; }

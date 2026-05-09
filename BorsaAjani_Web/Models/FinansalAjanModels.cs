@@ -148,6 +148,17 @@ public class PaperOrderResult
     [JsonPropertyName("error")] public string? Error { get; set; }
 }
 
+public class PaperTrade
+{
+    [JsonPropertyName("symbol")] public string Symbol { get; set; } = "";
+    [JsonPropertyName("action")] public string Action { get; set; } = "";
+    [JsonPropertyName("shares")] public double Shares { get; set; }
+    [JsonPropertyName("price")] public double Price { get; set; }
+    [JsonPropertyName("total")] public double Total { get; set; }
+    [JsonPropertyName("pnl")] public double Pnl { get; set; }
+    [JsonPropertyName("executed_at")] public string? ExecutedAt { get; set; }
+}
+
 public class AnalyzeRequest
 {
     [JsonPropertyName("symbol")] public string Symbol { get; set; } = "";
