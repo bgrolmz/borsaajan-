@@ -610,15 +610,14 @@ class MentorChatRequest(BaseModel):
 
 @app.post("/mentor/chat")
 def mentor_chat(request: MentorChatRequest):
-    """Chat with Mentor AI. Direct Gemini call — no daily quota DB counter."""
+    """Chat with Mentor AI. Direct Gemini call — bypasses daily quota DB counter."""
     try:
-        import os as _os
-        api_key = _os.environ.get("GOOGLE_API_KEY", "")
-        if not api_key:
-            return {"success": False, "reply": "API anahtarı eksik."}
+        from .logic import _get_genai_client
+        from google.genai import types as _genai_types
 
-        from google import genai as _genai
-        _client = _genai.Client(api_key=api_key)
+        client = _get_genai_client()
+        if client is None:
+            return {"success": False, "reply": "API anahtarı eksik."}
 
         ctx = request.context_data or {}
         ctx_parts = []
@@ -633,21 +632,27 @@ def mentor_chat(request: MentorChatRequest):
         ctx_str = "\n".join(ctx_parts)
 
         prompt = (
-            "Sen Borsa Ajanı'nın Mentor AI'sısın. Kısa, net, Türkçe yanıt ver (max 3 cümle). "
+            "Sen Borsa Ajanı'nın Mentor AI'sısın. Türkçe yanıt ver, net ve kısa (max 4 cümle). "
             "Finans uzmanı gibi konuş, gereksiz uyarı ekleme.\n"
             + (f"\nBağlam:\n{ctx_str}\n" if ctx_str else "")
-            + f"\nSoru: {request.user_message}"
+            + f"\nSoru/Görev: {request.user_message}"
+        )
+
+        config = _genai_types.GenerateContentConfig(
+            temperature=0.7,
+            max_output_tokens=1024,
         )
 
         reply = ""
-        for model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+        for model in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]:
             try:
-                resp = _client.models.generate_content(model=model, contents=prompt)
+                resp = client.models.generate_content(model=model, contents=prompt, config=config)
                 if resp and resp.text:
                     reply = resp.text.strip()
+                    print(f"[mentor/chat] OK via {model}, len={len(reply)}")
                     break
             except Exception as e:
-                print(f"[mentor/chat] {model} failed: {e}")
+                print(f"[mentor/chat] {model} failed: {type(e).__name__}: {e}")
                 continue
 
         if not reply:
@@ -655,6 +660,8 @@ def mentor_chat(request: MentorChatRequest):
 
         return {"success": True, "reply": reply}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ai-insight/{sembol}")
