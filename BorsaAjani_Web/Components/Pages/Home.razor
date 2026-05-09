@@ -19,8 +19,11 @@
    ═══════════════════════════════════════════════════════════ *@
 
 @* ── TOP HEADER ── *@
-<header class="fixed top-0 w-full z-50 flex items-center justify-between px-6 h-14 bg-[#0b1326] font-['Manrope'] antialiased tracking-tight border-b border-[#2d3449]/50">
-    <div class="flex items-center gap-8">
+<header class="fixed top-0 w-full z-50 flex items-center justify-between px-3 md:px-6 h-14 bg-[#0b1326] font-['Manrope'] antialiased tracking-tight border-b border-[#2d3449]/50 gap-2">
+    <div class="flex items-center gap-3 md:gap-8 min-w-0">
+        <button class="md:hidden p-2 text-[#00FFA3] hover:bg-[#131b2e] rounded" @onclick="() => sidebarOpen = !sidebarOpen" aria-label="Menu">
+            <span class="material-symbols-outlined text-xl">menu</span>
+        </button>
         @if (veri != null)
         {
             <span class="text-xl font-bold text-[#dae2fd] tracking-tighter">
@@ -36,9 +39,9 @@
             <span class="px-3 py-1 bg-[#131b2e] text-[#00FFA3] text-[10px] font-black rounded border border-[#00FFA3]/20 tracking-widest uppercase">@activeTab</span>
         </div>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2 md:gap-3 flex-wrap justify-end">
         <input @bind="sembol" @bind:event="oninput"
-               class="bg-[#131b2e] border-none text-xs px-4 py-2 w-44 rounded focus:ring-1 focus:ring-[#00FFA3] text-[#dae2fd] placeholder-[#b9cbbd]/50 outline-none transition-all"
+               class="bg-[#131b2e] border-none text-xs px-3 md:px-4 py-2 w-28 md:w-44 rounded focus:ring-1 focus:ring-[#00FFA3] text-[#dae2fd] placeholder-[#b9cbbd]/50 outline-none transition-all"
                placeholder="@(mod == "STOCK" ? "Hisse ara... NVDA" : "Kripto ara... BTC")" />
         @if (mod == "STOCK")
         {
@@ -61,15 +64,15 @@
         </button>
         @if (mod == "STOCK")
         {
-            <button class="px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimNVDA">NVDA</button>
-            <button class="px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimTSLA">TSLA</button>
-            <button class="px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimAAPL">AAPL</button>
+            <button class="hidden lg:inline-block px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimNVDA">NVDA</button>
+            <button class="hidden lg:inline-block px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimTSLA">TSLA</button>
+            <button class="hidden lg:inline-block px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimAAPL">AAPL</button>
         }
         else
         {
-            <button class="px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimBTC">BTC</button>
-            <button class="px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimETH">ETH</button>
-            <button class="px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimSOL">SOL</button>
+            <button class="hidden lg:inline-block px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimBTC">BTC</button>
+            <button class="hidden lg:inline-block px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimETH">ETH</button>
+            <button class="hidden lg:inline-block px-3 py-2 text-xs text-[#b9cbbd] bg-[#131b2e] rounded hover:bg-[#2d3449] transition-colors" @onclick="HizliSecimSOL">SOL</button>
         }
     </div>
 </header>
@@ -85,8 +88,14 @@
 @* ── LAYOUT SHELL ── *@
 <div class="flex pt-14 h-screen bg-[#0b1326] overflow-hidden">
 
+    @* ── MOBILE BACKDROP ── *@
+    @if (sidebarOpen)
+    {
+        <div class="md:hidden fixed inset-0 top-14 z-30 bg-black/60" @onclick="() => sidebarOpen = false"></div>
+    }
+
     @* ── LEFT SIDEBAR ── *@
-    <aside class="fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-64 bg-[#171f33] flex flex-col py-6 space-y-4 z-40">
+    <aside class="@(sidebarOpen ? "translate-x-0" : "-translate-x-full") md:translate-x-0 transform transition-transform duration-200 fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-64 bg-[#171f33] flex flex-col py-6 space-y-4 z-40">
         <div class="px-6 mb-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-[#2d3449] flex items-center justify-center border border-[#3a4a3f]/20">
@@ -127,7 +136,7 @@
     </aside>
 
     @* ── MAIN CONTENT ── *@
-    <main class="ml-64 mr-80 flex-1 overflow-y-auto bg-[#0b1326] p-8">
+    <main class="ml-0 md:ml-64 mr-0 lg:mr-80 flex-1 overflow-y-auto bg-[#0b1326] p-4 md:p-8">
 
         @if (activeTab == "Borsa" || activeTab == "Kripto")
         {
@@ -5252,6 +5261,7 @@
 @code {
     // Tab Management
     private string activeTab = "Bildirimler";
+    private bool sidebarOpen = false;
     
     // Stock/Crypto Analysis
     private string mod = "STOCK";
@@ -5685,6 +5695,7 @@
     {
         activeTab = tab;
         selectedNewsItem = null;
+        sidebarOpen = false;
         _ = SaveActiveTab(tab);
         if (tab == "Borsa")
         {
