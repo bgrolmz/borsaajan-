@@ -79,10 +79,7 @@
 
         @if (isLoading)
         {
-            <div style="text-align:center; padding:60px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
-                <div style="font-size:22px;">⏳</div>
-                <div>Yükleniyor…</div>
-            </div>
+            <BorsaAjani_Web.Components.SkeletonRow Count="5" Height="56" />
         }
         else if (items == null || !items.Any())
         {
