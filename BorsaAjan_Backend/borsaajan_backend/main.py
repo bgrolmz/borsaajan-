@@ -604,59 +604,122 @@ def get_mentor_news_endpoint(mode: str = "QUICK", confidence_threshold: int = 50
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+class MentorChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    text: str
+
 class MentorChatRequest(BaseModel):
     user_message: str
     context_data: dict = {}
+    history: List[MentorChatMessage] = []
 
 @app.post("/mentor/chat")
 def mentor_chat(request: MentorChatRequest):
-    """Chat with Mentor AI. Direct Gemini call — bypasses daily quota DB counter."""
+    """Chat with Mentor AI as senior portfolio manager. Multi-turn, rich context."""
     try:
         from .logic import _get_genai_client
         from google.genai import types as _genai_types
+        import time as _time
 
         client = _get_genai_client()
         if client is None:
             return {"success": False, "reply": "API anahtarı eksik."}
 
         ctx = request.context_data or {}
-        ctx_parts = []
+        ctx_lines = []
         if ctx.get("symbol"):
-            ctx_parts.append(f"Sembol: {ctx['symbol']}")
+            ctx_lines.append(f"- Sembol: {ctx['symbol']}")
+        if ctx.get("name"):
+            ctx_lines.append(f"- Şirket: {ctx['name']} ({ctx.get('sector','')})")
+        if ctx.get("price") is not None:
+            ctx_lines.append(f"- Fiyat: ${ctx['price']:.2f} ({ctx.get('change_pct',0):+.2f}%)")
         if ctx.get("decision"):
-            ctx_parts.append(f"Karar: {ctx['decision']}")
+            ctx_lines.append(f"- Sistem Kararı: {ctx['decision']} (güven: {ctx.get('confidence','—')})")
         if ctx.get("ev") is not None:
-            ctx_parts.append(f"EV: {ctx['ev']:.2f}")
+            ctx_lines.append(f"- EV (Beklenen Değer): ${ctx['ev']:.2f} (ROI %{ctx.get('roi_pct',0):.1f})")
         if ctx.get("kelly_pct") is not None:
-            ctx_parts.append(f"Kelly: %{ctx['kelly_pct']:.1f}")
-        ctx_str = "\n".join(ctx_parts)
+            ctx_lines.append(f"- Kelly çeyrek: %{ctx['kelly_pct']:.1f} → {ctx.get('kelly_shares','?')} hisse / ${ctx.get('kelly_dollar','?')}")
+        if ctx.get("bayes_posterior") is not None:
+            ctx_lines.append(f"- Bayes posterior: %{ctx['bayes_posterior']} (önsel %{ctx.get('bayes_prior','?')})")
+        if ctx.get("entry") is not None:
+            ctx_lines.append(f"- Hedef plan: Giriş ${ctx['entry']:.2f} / Hedef ${ctx.get('target',0):.2f} / Stop ${ctx.get('stop',0):.2f}")
+        if ctx.get("rsi") is not None:
+            ctx_lines.append(f"- RSI: {ctx['rsi']:.1f}")
+        if ctx.get("pe_ratio") is not None:
+            ctx_lines.append(f"- F/K: {ctx['pe_ratio']:.1f}")
+        if ctx.get("analyst_target") is not None:
+            ctx_lines.append(f"- Analist hedef: ${ctx['analyst_target']:.2f} ({ctx.get('analyst_count','?')} analist)")
+        if ctx.get("news"):
+            news_lines = []
+            for i, n in enumerate(ctx["news"][:5], 1):
+                if isinstance(n, dict):
+                    sent = n.get("sentiment", "nötr")
+                    summary = n.get("summary_tr") or n.get("title", "")
+                    news_lines.append(f"  {i}. [{sent}] {summary[:160]}")
+                elif isinstance(n, str):
+                    news_lines.append(f"  {i}. {n[:160]}")
+            if news_lines:
+                ctx_lines.append("- Son haberler:\n" + "\n".join(news_lines))
+        if ctx.get("bull_thesis"):
+            ctx_lines.append(f"- Boğa tezi: {' | '.join(ctx['bull_thesis'][:3])}")
+        if ctx.get("bear_thesis"):
+            ctx_lines.append(f"- Ayı tezi: {' | '.join(ctx['bear_thesis'][:3])}")
 
-        prompt = (
-            "Sen Borsa Ajanı'nın Mentor AI'sısın. Türkçe yanıt ver, net ve kısa (max 4 cümle). "
-            "Finans uzmanı gibi konuş, gereksiz uyarı ekleme.\n"
-            + (f"\nBağlam:\n{ctx_str}\n" if ctx_str else "")
-            + f"\nSoru/Görev: {request.user_message}"
+        ctx_str = "\n".join(ctx_lines) if ctx_lines else "(analiz verisi henüz yok)"
+
+        system_prompt = (
+            "Sen 20 yıllık deneyimli bir KIDEMLİ PORTFÖY YÖNETİCİSİSİN. "
+            "Müşterinle konuşuyorsun — bir broker, danışman gibi konuş.\n\n"
+            "KURALLAR:\n"
+            "1. NET POZISYON AL. 'Birçok faktör vardır', 'değerlendirilmesi önemlidir' tarzı boş laf YASAK.\n"
+            "2. 'AL' / 'TUT' / 'SAT' / 'BEKLE' gibi NET tavsiye ver. Neden? Çünkü müşteri karar bekliyor.\n"
+            "3. Sayılarla konuş: fiyat seviyesi, stop, hedef, pozisyon büyüklüğü.\n"
+            "4. Piyasa kapalıysa AÇILIŞTA NE YAPMASI GEREKTİĞİNİ söyle — 'analiz edemem' deme. Mevcut data + son haberlerle senaryo kur.\n"
+            "5. 'Yatırım tavsiyesi değildir' / 'Profesyonel danışman ile görüş' tarzı sigortalanma cümleleri YASAK. Sen zaten profesyonelsin.\n"
+            "6. Maksimum 5-6 cümle. Madde madde gerekiyorsa 3 madde yeterli.\n"
+            "7. Bağlamdaki sayılara (EV, Kelly, Bayes, haber) referans ver — sistemin verdiği datayı kullanmazsan değersizsin.\n"
+            "8. Müşterinin önceki sorularını HATIRLA — konuşmayı sürdür, baştan başlama.\n"
         )
 
+        contents_list = [system_prompt + "\n\n=== ANALİZ BAĞLAMI ===\n" + ctx_str + "\n=== /BAĞLAM ===\n"]
+        for msg in (request.history or [])[-8:]:
+            role_tag = "MÜŞTERİ" if msg.role == "user" else "MENTOR"
+            contents_list.append(f"\n{role_tag}: {msg.text}")
+        contents_list.append(f"\nMÜŞTERİ: {request.user_message}\nMENTOR:")
+
+        prompt = "".join(contents_list)
+
         config = _genai_types.GenerateContentConfig(
-            temperature=0.7,
+            temperature=0.85,
             max_output_tokens=1024,
         )
 
         reply = ""
+        last_err = None
         for model in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]:
-            try:
-                resp = client.models.generate_content(model=model, contents=prompt, config=config)
-                if resp and resp.text:
-                    reply = resp.text.strip()
-                    print(f"[mentor/chat] OK via {model}, len={len(reply)}")
+            for attempt in range(2):
+                try:
+                    resp = client.models.generate_content(model=model, contents=prompt, config=config)
+                    if resp and resp.text:
+                        reply = resp.text.strip()
+                        print(f"[mentor/chat] OK via {model} (attempt {attempt+1}), len={len(reply)}")
+                        break
+                except Exception as e:
+                    last_err = e
+                    err_str = str(e)
+                    print(f"[mentor/chat] {model} attempt {attempt+1} failed: {type(e).__name__}: {err_str[:200]}")
+                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str.upper():
+                        _time.sleep(2)
+                        continue
                     break
-            except Exception as e:
-                print(f"[mentor/chat] {model} failed: {type(e).__name__}: {e}")
-                continue
+            if reply:
+                break
 
         if not reply:
-            reply = "Mentor şu an yanıt veremiyor. Lütfen tekrar deneyin."
+            reply = (
+                "Şu an Gemini API rate limit'e takıldım (429). 30-60 saniye bekle ve tekrar dene. "
+                "Bu süre zarfında: analiz kartlarındaki EV, Kelly ve Bayes verilerine bakarak ön karar verebilirsin."
+            )
 
         return {"success": True, "reply": reply}
     except Exception as e:
