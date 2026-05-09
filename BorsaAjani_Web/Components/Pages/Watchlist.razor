@@ -45,8 +45,30 @@
                 <button @onclick="AddSymbol" disabled="@isAdding" class="wf-btn primary">
                     @(isAdding ? "Ekleniyor…" : "+ Ekle")
                 </button>
+                <button @onclick="ToggleBulk" class="wf-btn sm" title="Toplu ekle">@(showBulk ? "− Toplu" : "+ Toplu")</button>
             </div>
         </div>
+
+        @if (showBulk)
+        {
+            <div class="sk-card dashed" style="margin-bottom:14px;">
+                <div class="sk-card-h">
+                    <span class="sk-h-title">Toplu Sembol Ekle</span>
+                    <span class="sk-h-meta">virgül / boşluk / yeni satır ile ayır</span>
+                </div>
+                <textarea @bind="bulkText" rows="3" placeholder="AAPL, NVDA TSLA&#10;BTC-USD ETH-USD"
+                          class="sk-input" style="width:100%; font-family:var(--f-mono); font-size:12px; text-transform:uppercase; resize:vertical;"></textarea>
+                <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                    <select @bind="bulkMode" class="sk-input" style="width:120px;">
+                        <option value="STOCK">Hisse olarak</option>
+                        <option value="CRYPTO">Kripto olarak</option>
+                    </select>
+                    <button @onclick="AddBulk" disabled="@isAdding" class="wf-btn primary sm">
+                        @(isAdding ? "Ekleniyor…" : "↪ Tümünü Ekle")
+                    </button>
+                </div>
+            </div>
+        }
 
         @if (!string.IsNullOrEmpty(message))
         {
@@ -74,25 +96,33 @@
         }
         else
         {
+            var filtered = FilterAndSort(items);
             <div class="sk-card">
                 <div class="sk-card-h">
                     <span class="sk-h-title">Takip Edilen Semboller</span>
-                    <span class="sk-h-meta">@items.Count adet</span>
+                    <span class="sk-h-meta">@filtered.Count / @items.Count adet</span>
+                </div>
+                <div style="display:flex; gap:6px; padding:6px 0 10px 0; border-bottom:1px dashed var(--wf-border); margin-bottom:6px;">
+                    <button @onclick='() => filterMode = "ALL"' class="wf-btn xs @(filterMode == "ALL" ? "primary" : "")">Tümü</button>
+                    <button @onclick='() => filterMode = "STOCK"' class="wf-btn xs @(filterMode == "STOCK" ? "primary" : "")">Hisse</button>
+                    <button @onclick='() => filterMode = "CRYPTO"' class="wf-btn xs @(filterMode == "CRYPTO" ? "primary" : "")">Kripto</button>
+                    <div style="flex:1"></div>
+                    <input @bind="searchText" @bind:event="oninput" placeholder="Ara..." class="sk-input" style="width:140px; font-size:12px; padding:4px 8px;" />
                 </div>
                 <table class="sk-table" style="width:100%; border-collapse:collapse;">
                     <thead>
                         <tr style="border-bottom:1px solid var(--wf-border);">
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tür</th>
-                            <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat</th>
-                            <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Değişim%</th>
+                            <th @onclick='() => SetSort("symbol")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol @SortArrow("symbol")</th>
+                            <th @onclick='() => SetSort("mode")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Tür @SortArrow("mode")</th>
+                            <th @onclick='() => SetSort("price")' style="cursor:pointer; text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat @SortArrow("price")</th>
+                            <th @onclick='() => SetSort("change")' style="cursor:pointer; text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Değişim% @SortArrow("change")</th>
                             <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sinyal</th>
-                            <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Eklendi</th>
+                            <th @onclick='() => SetSort("added")' style="cursor:pointer; text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Eklendi @SortArrow("added")</th>
                             <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var it in items)
+                        @foreach (var it in filtered)
                         {
                             var hasQuote = quotes.TryGetValue(it.Symbol ?? "", out var q);
                             var changeCls = hasQuote && q.change >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
@@ -155,6 +185,76 @@
     private bool isAdding = false;
     private string message = "";
     private bool messageOk = true;
+
+    // Filter / sort / bulk
+    private string filterMode = "ALL";
+    private string searchText = "";
+    private string sortBy = "added";
+    private bool sortDesc = true;
+    private bool showBulk = false;
+    private string bulkText = "";
+    private string bulkMode = "STOCK";
+
+    private void ToggleBulk() => showBulk = !showBulk;
+
+    private void SetSort(string col)
+    {
+        if (sortBy == col) sortDesc = !sortDesc;
+        else { sortBy = col; sortDesc = false; }
+    }
+
+    private string SortArrow(string col) => sortBy == col ? (sortDesc ? "▼" : "▲") : "";
+
+    private List<WatchlistItem> FilterAndSort(List<WatchlistItem> src)
+    {
+        IEnumerable<WatchlistItem> q = src;
+        if (filterMode != "ALL") q = q.Where(x => x.Mode == filterMode);
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var s = searchText.Trim().ToUpper();
+            q = q.Where(x => (x.Symbol ?? "").ToUpper().Contains(s));
+        }
+        Func<WatchlistItem, IComparable> key = sortBy switch
+        {
+            "symbol" => x => x.Symbol ?? "",
+            "mode"   => x => x.Mode ?? "",
+            "price"  => x => quotes.TryGetValue(x.Symbol ?? "", out var qd) ? qd.price : double.MinValue,
+            "change" => x => quotes.TryGetValue(x.Symbol ?? "", out var qd) ? qd.change : double.MinValue,
+            "added"  => x => x.AddedAt ?? "",
+            _        => x => x.Symbol ?? ""
+        };
+        q = sortDesc ? q.OrderByDescending(key) : q.OrderBy(key);
+        return q.ToList();
+    }
+
+    private async Task AddBulk()
+    {
+        if (string.IsNullOrWhiteSpace(bulkText)) return;
+        var symbols = bulkText
+            .Split(new[] { ',', ' ', '\n', '\r', '\t', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim().ToUpper())
+            .Where(s => s.Length > 0)
+            .Distinct()
+            .ToList();
+        if (!symbols.Any()) return;
+        isAdding = true;
+        int ok = 0, fail = 0;
+        foreach (var sym in symbols)
+        {
+            try
+            {
+                var added = await Ajan.AddWatchlistAsync(sym, bulkMode);
+                if (added) ok++; else fail++;
+            }
+            catch { fail++; }
+        }
+        message = $"✓ {ok} eklendi, {fail} başarısız";
+        messageOk = ok > 0;
+        bulkText = "";
+        isAdding = false;
+        await LoadWatchlist();
+        await RefreshQuotes();
+    }
 
     private record QuoteData(double price, double change, string mentorTag);
     private Dictionary<string, QuoteData> quotes = new();
