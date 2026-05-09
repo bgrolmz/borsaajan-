@@ -610,13 +610,50 @@ class MentorChatRequest(BaseModel):
 
 @app.post("/mentor/chat")
 def mentor_chat(request: MentorChatRequest):
-    """Chat with Mentor AI. Answers user questions using Gemini with optional stock context."""
+    """Chat with Mentor AI. Direct Gemini call — no daily quota DB counter."""
     try:
-        result = chat_with_mentor(request.user_message, request.context_data or {})
-        return {
-            "success": result.get("success", True),
-            "reply": result.get("response", "Mentor yanıt veremedi."),
-        }
+        import os as _os
+        api_key = _os.environ.get("GOOGLE_API_KEY", "")
+        if not api_key:
+            return {"success": False, "reply": "API anahtarı eksik."}
+
+        from google import genai as _genai
+        _client = _genai.Client(api_key=api_key)
+
+        ctx = request.context_data or {}
+        ctx_parts = []
+        if ctx.get("symbol"):
+            ctx_parts.append(f"Sembol: {ctx['symbol']}")
+        if ctx.get("decision"):
+            ctx_parts.append(f"Karar: {ctx['decision']}")
+        if ctx.get("ev") is not None:
+            ctx_parts.append(f"EV: {ctx['ev']:.2f}")
+        if ctx.get("kelly_pct") is not None:
+            ctx_parts.append(f"Kelly: %{ctx['kelly_pct']:.1f}")
+        ctx_str = "\n".join(ctx_parts)
+
+        prompt = (
+            "Sen Borsa Ajanı'nın Mentor AI'sısın. Kısa, net, Türkçe yanıt ver (max 3 cümle). "
+            "Finans uzmanı gibi konuş, gereksiz uyarı ekleme.\n"
+            + (f"\nBağlam:\n{ctx_str}\n" if ctx_str else "")
+            + f"\nSoru: {request.user_message}"
+        )
+
+        reply = ""
+        for model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+            try:
+                resp = _client.models.generate_content(model=model, contents=prompt)
+                if resp and resp.text:
+                    reply = resp.text.strip()
+                    break
+            except Exception as e:
+                print(f"[mentor/chat] {model} failed: {e}")
+                continue
+
+        if not reply:
+            reply = "Mentor şu an yanıt veremiyor. Lütfen tekrar deneyin."
+
+        return {"success": True, "reply": reply}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
