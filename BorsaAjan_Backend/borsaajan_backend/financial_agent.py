@@ -406,7 +406,8 @@ def _gemini_analyze(symbol: str, data: dict, ev: dict, kelly: dict, bayes: dict)
             import google.generativeai as genai  # fallback
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            return _fallback_analysis(symbol, data, ev, kelly)
+            logger.warning("GOOGLE_API_KEY not set — Gemini commentary unavailable")
+            return ""
 
         client = genai.Client(api_key=api_key)
 
@@ -434,31 +435,22 @@ GÜÇ: [en güçlü 2 nokta]
 RİSK: [en önemli 2 risk]
 KARAR: [AL / SAT / BEKLE — tek kelime] — [tek cümle gerekçe]"""
 
-        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
         for model in models_to_try:
             try:
                 response = client.models.generate_content(model=model, contents=prompt)
                 if response and response.text:
                     return response.text.strip()
-            except Exception:
+            except Exception as model_err:
+                logger.warning(f"Gemini model {model} failed: {model_err}")
                 continue
 
-        return _fallback_analysis(symbol, data, ev, kelly)
+        logger.error(f"All Gemini models failed for {symbol}")
+        return ""
 
     except Exception as e:
         logger.error(f"Gemini analysis failed: {e}")
-        return _fallback_analysis(symbol, data, ev, kelly)
-
-
-def _fallback_analysis(symbol: str, data: dict, ev: dict, kelly: dict) -> str:
-    """Simple text output when Gemini unavailable."""
-    verdict = ev.get("verdict", "SKIP")
-    return (
-        f"{symbol} analizi tamamlandi.\n"
-        f"Fiyat: ${data.get('price', 'N/A')} | EV: ${ev.get('ev', 0):.2f}\n"
-        f"Karar: {verdict} | Kelly: %{kelly.get('capped_pct', 0):.1f}\n"
-        f"(AI yorumu su an mevcut degil)"
-    )
+        return ""
 
 
 # ============================================================================

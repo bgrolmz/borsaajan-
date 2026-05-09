@@ -206,7 +206,7 @@ public class FinansalAjanService
                     Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() : null,
                     Mode = el.TryGetProperty("mode", out var m) ? m.GetString() : null,
                     Summary = el.TryGetProperty("summary", out var sm) ? sm.GetString() : null,
-                    RiskLevel = el.TryGetProperty("risk_level", out var r) ? r.GetString() : null,
+                    RiskLevel = el.TryGetProperty("risk_level", out var r) ? (r.ValueKind == JsonValueKind.Number ? r.GetInt32().ToString() : r.GetString()) : null,
                     PriceAtAnalysis = el.TryGetProperty("price_at_analysis", out var p) && p.ValueKind == JsonValueKind.Number ? p.GetDouble() : (double?)null,
                     CreatedAt = el.TryGetProperty("created_at", out var c) ? c.GetString() : null,
                 });

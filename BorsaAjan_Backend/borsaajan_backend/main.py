@@ -604,6 +604,22 @@ def get_mentor_news_endpoint(mode: str = "QUICK", confidence_threshold: int = 50
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+class MentorChatRequest(BaseModel):
+    user_message: str
+    context_data: dict = {}
+
+@app.post("/mentor/chat")
+def mentor_chat(request: MentorChatRequest):
+    """Chat with Mentor AI. Answers user questions using Gemini with optional stock context."""
+    try:
+        result = chat_with_mentor(request.user_message, request.context_data or {})
+        return {
+            "success": result.get("success", True),
+            "reply": result.get("response", "Mentor yanıt veremedi."),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/ai-insight/{sembol}")
 def ai_insight(sembol: str, maliyet: float = None, adet: float = 1, mode: str = "STOCK", use_llm: int = 1, detail: str = "medium"):
     """
@@ -2270,6 +2286,53 @@ def news_history_all(limit: int = 50):
 def news_history(symbol: str, limit: int = 20):
     data = get_news_history(symbol.upper(), limit=limit)
     return {"symbol": symbol.upper(), "count": len(data), "history": data}
+
+
+class TranslateTitlesRequest(BaseModel):
+    titles: List[str]
+
+@app.post("/news/translate")
+def translate_news_titles(request: TranslateTitlesRequest):
+    """Batch translate news titles to Turkish using Gemini."""
+    titles = request.titles[:15]
+    if not titles:
+        return {"translations": {}}
+    try:
+        import os as _os
+        _api_key = _os.environ.get("GOOGLE_API_KEY", "")
+        if not _api_key:
+            return {"translations": {}}
+        from google import genai as _genai
+        _client = _genai.Client(api_key=_api_key)
+        items_str = "\n".join(f"{i+1}. {t}" for i, t in enumerate(titles))
+        prompt = (
+            f"Aşağıdaki {len(titles)} İngilizce haber başlığını Türkçeye çevir. "
+            f"Sadece numaralı çeviriler döndür, başka açıklama ekleme.\n\n{items_str}"
+        )
+        response_text = ""
+        for model in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+            try:
+                resp = _client.models.generate_content(model=model, contents=prompt)
+                if resp and resp.text:
+                    response_text = resp.text.strip()
+                    break
+            except Exception:
+                continue
+        translations = {}
+        if response_text:
+            lines = response_text.strip().split("\n")
+            for i, original in enumerate(titles):
+                for line in lines:
+                    line = line.strip()
+                    prefix = f"{i+1}."
+                    if line.startswith(prefix):
+                        translated = line[len(prefix):].strip()
+                        if translated:
+                            translations[original] = translated
+                        break
+        return {"translations": translations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================

@@ -3,10 +3,14 @@
 @using BorsaAjani_Web.Models
 @using BorsaAjani_Web.Services
 @using Microsoft.AspNetCore.Components.Web
+@using System.Net.Http
+@using System.Net.Http.Json
+@using System.Text.Json
 @inject FinansalAjanService Ajan
 @inject NavigationManager Nav
+@inject IHttpClientFactory HttpFactory
 
-<PageTitle>Paper Trading — Borsa Ajanı</PageTitle>
+<PageTitle>Portföy — Borsa Ajanı</PageTitle>
 
 <div class="ha-shell">
 
@@ -14,7 +18,7 @@
         <a href="/" class="ha-sb-logo" title="Ana Sayfa">B</a>
         <a href="/hisse-analizi" class="ha-sb-icon" title="Analiz">◎</a>
         <a href="/watchlist" class="ha-sb-icon" title="Watchlist">☆</a>
-        <a href="/paper-trading" class="ha-sb-icon active" title="Paper Trading">▣</a>
+        <a href="/paper-trading" class="ha-sb-icon active" title="Portföy">▣</a>
         <a href="/gecmis" class="ha-sb-icon" title="Geçmiş">⌛</a>
         <div style="flex:1"></div>
         <a href="/" class="ha-sb-icon" title="Ana Sayfa">⌂</a>
@@ -23,11 +27,30 @@
     <main class="ha-main">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
             <div>
-                <h1 style="font-family:var(--f-hand); font-size:28px; color:var(--wf-ink); margin:0;">▣ Paper Trading</h1>
-                <span class="sk-tag" style="display:block; margin-top:4px;">Simüle pozisyonlar — gerçek para değil</span>
+                <h1 style="font-family:var(--f-hand); font-size:28px; color:var(--wf-ink); margin:0;">▣ Portföy</h1>
+                <span class="sk-tag" style="display:block; margin-top:4px;">Gerçek ve simüle pozisyonlar</span>
             </div>
-            <button @onclick="ResetPortfolio" disabled="@isResetting" class="wf-btn sm danger">
-                @(isResetting ? "Sıfırlanıyor…" : "↺ Portföyü Sıfırla")
+            @if (activeTab == "simule")
+            {
+                <button @onclick="ResetPortfolio" disabled="@isResetting" class="wf-btn sm danger">
+                    @(isResetting ? "Sıfırlanıyor…" : "↺ Simülasyonu Sıfırla")
+                </button>
+            }
+        </div>
+
+        @* ── Tab bar ── *@
+        <div style="display:flex; gap:0; margin-bottom:18px; border-bottom:2px solid var(--wf-border);">
+            <button @onclick='() => activeTab = "gercek"'
+                    style="padding:8px 20px; font-family:var(--f-hand); font-size:14px; font-weight:600; border:none; background:transparent; cursor:pointer;
+                           color:@(activeTab=="gercek" ? "var(--wf-buy)" : "var(--wf-ink-mute)");
+                           border-bottom:2px solid @(activeTab=="gercek" ? "var(--wf-buy)" : "transparent"); margin-bottom:-2px;">
+                💼 Gerçek Portföy
+            </button>
+            <button @onclick='() => activeTab = "simule"'
+                    style="padding:8px 20px; font-family:var(--f-hand); font-size:14px; font-weight:600; border:none; background:transparent; cursor:pointer;
+                           color:@(activeTab=="simule" ? "var(--wf-acc)" : "var(--wf-ink-mute)");
+                           border-bottom:2px solid @(activeTab=="simule" ? "var(--wf-acc)" : "transparent"); margin-bottom:-2px;">
+                ▣ Simüle
             </button>
         </div>
 
@@ -38,87 +61,183 @@
             </div>
         }
 
-        @if (isLoading)
+        @* ══════════════════════════════════════════════
+           GERÇEK PORTFÖY TAB
+           ══════════════════════════════════════════════ *@
+        @if (activeTab == "gercek")
         {
-            <div style="text-align:center; padding:60px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
-                <div style="font-size:22px;">⏳</div>
-                <div>Yükleniyor…</div>
-            </div>
-        }
-        else if (portfolio == null)
-        {
-            <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
-                <div style="font-size:38px; opacity:0.3;">▣</div>
-                <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim);">Portföy yüklenemedi</div>
-            </div>
-        }
-        else
-        {
-            @* Toplam metrikler *@
-            <div class="sk-grid-3" style="margin-bottom:14px;">
-                <div class="sk-card">
-                    <div class="sk-card-h"><span class="sk-h-title">Toplam Sermaye</span></div>
-                    <span class="sk-num sk-num-xl">$@portfolio.TotalEquity.ToString("F2")</span>
-                </div>
-                <div class="sk-card">
-                    <div class="sk-card-h"><span class="sk-h-title">Nakit</span></div>
-                    <span class="sk-num sk-num-xl" style="color:var(--wf-acc);">$@portfolio.Cash.ToString("F2")</span>
-                </div>
-                <div class="sk-card">
-                    <div class="sk-card-h"><span class="sk-h-title">Pozisyon Değeri</span></div>
-                    <span class="sk-num sk-num-xl">$@portfolio.PositionsValue.ToString("F2")</span>
+            @* Add form *@
+            <div class="sk-card dashed" style="margin-bottom:14px;">
+                <div class="sk-card-h"><span class="sk-h-title">Pozisyon Ekle</span></div>
+                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:8px;">
+                    <div>
+                        <span class="sk-tag" style="display:block; margin-bottom:3px;">Sembol</span>
+                        <input @bind="realSymbol" placeholder="AAPL" class="sk-input" style="width:100px; text-transform:uppercase;" />
+                    </div>
+                    <div>
+                        <span class="sk-tag" style="display:block; margin-bottom:3px;">Adet</span>
+                        <input type="number" @bind="realQty" step="0.01" class="sk-input" style="width:90px;" />
+                    </div>
+                    <div>
+                        <span class="sk-tag" style="display:block; margin-bottom:3px;">Ort. Maliyet $</span>
+                        <input type="number" @bind="realAvgCost" step="0.01" class="sk-input" style="width:110px;" />
+                    </div>
+                    <button @onclick="AddRealPosition" disabled="@isRealAdding" class="wf-btn primary">
+                        @(isRealAdding ? "Ekleniyor…" : "+ Ekle")
+                    </button>
                 </div>
             </div>
 
-            @* Pozisyonlar *@
-            <div class="sk-card">
-                <div class="sk-card-h">
-                    <span class="sk-h-title">Açık Pozisyonlar</span>
-                    <span class="sk-h-meta">@(portfolio.Positions?.Count ?? 0) sembol</span>
+            @if (isRealLoading)
+            {
+                <div style="text-align:center; padding:40px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">⏳ Yükleniyor…</div>
+            }
+            else if (!realItems.Any())
+            {
+                <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
+                    <div style="font-size:38px; opacity:0.3;">💼</div>
+                    <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim); margin-top:8px;">Gerçek portföy boş</div>
+                    <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); margin-top:6px;">Yukarıdan pozisyon ekle</div>
                 </div>
-                @if (portfolio.Positions == null || !portfolio.Positions.Any())
-                {
-                    <div style="padding:30px 0; text-align:center; font-family:var(--f-hand); color:var(--wf-ink-dim);">
-                        Açık pozisyon yok. Hisse Analizi sayfasından AL/SAT yapabilirsin.
+            }
+            else
+            {
+                @* Summary *@
+                <div class="sk-grid-3" style="margin-bottom:14px;">
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Toplam Maliyet</span></div>
+                        <span class="sk-num sk-num-xl">$@realItems.Sum(x => x.Quantity * x.AvgCost).ToString("F2")</span>
                     </div>
-                }
-                else
-                {
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Sembol Sayısı</span></div>
+                        <span class="sk-num sk-num-xl">@realItems.Count</span>
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Son Güncelleme</span></div>
+                        <span class="sk-num sk-num-sm" style="font-size:12px; color:var(--wf-ink-mute);">@(realItems.Max(x => x.UpdatedAt)?[..Math.Min(10, realItems.Max(x => x.UpdatedAt)?.Length ?? 0)] ?? "—")</span>
+                    </div>
+                </div>
+
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Pozisyonlar</span>
+                        <span class="sk-h-meta">@realItems.Count adet</span>
+                    </div>
                     <table style="width:100%; border-collapse:collapse;">
                         <thead>
                             <tr style="border-bottom:1px solid var(--wf-border);">
                                 <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
                                 <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Adet</th>
                                 <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Ort. Maliyet</th>
-                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Şu An</th>
-                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Değer</th>
-                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">P&amp;L</th>
+                                <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Toplam Maliyet</th>
                                 <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var p in portfolio.Positions)
+                            @foreach (var item in realItems)
                             {
-                                var pnlColor = p.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
                                 <tr style="border-bottom:1px dashed var(--wf-border);">
-                                    <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@p.Symbol</td>
-                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@p.Shares.ToString("F2")</td>
-                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.AvgCost.ToString("F2")</td>
-                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.CurrentPrice.ToString("F2")</td>
-                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.MarketValue.ToString("F2")</td>
-                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px; color:@pnlColor; font-weight:600;">
-                                        @(p.Pnl >= 0 ? "+" : "")$@p.Pnl.ToString("F2")
-                                        <div style="font-size:10px;">(@(p.PnlPct >= 0 ? "+" : "")%@p.PnlPct.ToString("F2"))</div>
-                                    </td>
+                                    <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@item.Symbol</td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@item.Quantity.ToString("F4")</td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@item.AvgCost.ToString("F2")</td>
+                                    <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px; color:var(--wf-ink);">$@((item.Quantity * item.AvgCost).ToString("F2"))</td>
                                     <td style="padding:10px 4px; text-align:right;">
-                                        <a href="/hisse-analizi/@p.Symbol" class="wf-btn xs">▶</a>
+                                        <a href="/hisse-analizi/@item.Symbol" class="wf-btn xs">▶ Analiz</a>
+                                        <button @onclick="@(() => RemoveRealPosition(item.Symbol))" class="wf-btn xs danger">✕</button>
                                     </td>
                                 </tr>
                             }
                         </tbody>
                     </table>
-                }
-            </div>
+                </div>
+            }
+        }
+
+        @* ══════════════════════════════════════════════
+           SİMÜLE TAB
+           ══════════════════════════════════════════════ *@
+        @if (activeTab == "simule")
+        {
+            @if (isLoading)
+            {
+                <div style="text-align:center; padding:60px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
+                    <div style="font-size:22px;">⏳</div>
+                    <div>Yükleniyor…</div>
+                </div>
+            }
+            else if (portfolio == null)
+            {
+                <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
+                    <div style="font-size:38px; opacity:0.3;">▣</div>
+                    <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim);">Portföy yüklenemedi</div>
+                </div>
+            }
+            else
+            {
+                <div class="sk-grid-3" style="margin-bottom:14px;">
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Toplam Sermaye</span></div>
+                        <span class="sk-num sk-num-xl">$@portfolio.TotalEquity.ToString("F2")</span>
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Nakit</span></div>
+                        <span class="sk-num sk-num-xl" style="color:var(--wf-acc);">$@portfolio.Cash.ToString("F2")</span>
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-card-h"><span class="sk-h-title">Pozisyon Değeri</span></div>
+                        <span class="sk-num sk-num-xl">$@portfolio.PositionsValue.ToString("F2")</span>
+                    </div>
+                </div>
+
+                <div class="sk-card">
+                    <div class="sk-card-h">
+                        <span class="sk-h-title">Açık Pozisyonlar</span>
+                        <span class="sk-h-meta">@(portfolio.Positions?.Count ?? 0) sembol</span>
+                    </div>
+                    @if (portfolio.Positions == null || !portfolio.Positions.Any())
+                    {
+                        <div style="padding:30px 0; text-align:center; font-family:var(--f-hand); color:var(--wf-ink-dim);">
+                            Açık pozisyon yok. Hisse Analizi sayfasından AL/SAT yapabilirsin.
+                        </div>
+                    }
+                    else
+                    {
+                        <table style="width:100%; border-collapse:collapse;">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--wf-border);">
+                                    <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Adet</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Ort. Maliyet</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Şu An</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Değer</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">P&amp;L</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in portfolio.Positions)
+                                {
+                                    var pnlColor = p.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)";
+                                    <tr style="border-bottom:1px dashed var(--wf-border);">
+                                        <td style="padding:10px 4px; font-family:var(--f-hand); font-size:15px; font-weight:600;">@p.Symbol</td>
+                                        <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@p.Shares.ToString("F2")</td>
+                                        <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.AvgCost.ToString("F2")</td>
+                                        <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.CurrentPrice.ToString("F2")</td>
+                                        <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@p.MarketValue.ToString("F2")</td>
+                                        <td style="padding:10px 4px; text-align:right; font-family:var(--f-mono); font-size:12px; color:@pnlColor; font-weight:600;">
+                                            @(p.Pnl >= 0 ? "+" : "")$@p.Pnl.ToString("F2")
+                                            <div style="font-size:10px;">(@(p.PnlPct >= 0 ? "+" : "")%@p.PnlPct.ToString("F2"))</div>
+                                        </td>
+                                        <td style="padding:10px 4px; text-align:right;">
+                                            <a href="/hisse-analizi/@p.Symbol" class="wf-btn xs">▶</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
         }
     </main>
 
@@ -128,42 +247,154 @@
                 <div class="mentor-avatar">M</div>
                 <div>
                     <div style="font-family:var(--f-hand); font-size:14px; color:var(--wf-ink); font-weight:600;">Mentor · Doğa</div>
-                    <span class="sk-tag" style="font-size:9px;">PAPER TRADING AKLI</span>
+                    <span class="sk-tag" style="font-size:9px;">@(activeTab == "gercek" ? "GERÇEK PORTFÖY" : "PAPER TRADING")</span>
                 </div>
             </div>
-            <div class="mentor-bubble">
-                Paper trading <strong>simüle</strong>. Disiplini test et, gerçek paraya geçmeden önce 30+ işlem deneyimi al.
-            </div>
-            <div class="mentor-bubble">
-                <strong>Kural:</strong> Her pozisyon Kelly öneri ölçüsünde. Stop-loss şart. P&amp;L'ı duygulara göre değil sisteme göre yorumla.
-            </div>
+            @if (activeTab == "gercek")
+            {
+                <div class="mentor-bubble">
+                    Gerçek portföyünü buraya gir — <strong>maliyet takibi</strong> ve AI analiz bağlantısı için. Fiyat güncelleme yok, sadece pozisyon kaydı.
+                </div>
+                <div class="mentor-bubble">
+                    <strong>İpucu:</strong> Kelly fraction'ı gerçek pozisyon büyüklüğünle karşılaştır. Aşırı konsantrasyon görürsen azalt.
+                </div>
+            }
+            else
+            {
+                <div class="mentor-bubble">
+                    Paper trading <strong>simüle</strong>. Disiplini test et, gerçek paraya geçmeden önce 30+ işlem deneyimi al.
+                </div>
+                <div class="mentor-bubble">
+                    <strong>Kural:</strong> Her pozisyon Kelly öneri ölçüsünde. Stop-loss şart. P&amp;L'ı duygulara göre değil sisteme göre yorumla.
+                </div>
+            }
         </div>
     </aside>
 </div>
 
 @code {
+    private string activeTab = "gercek";
+
+    // Paper trading state
     private PaperPortfolio? portfolio;
     private bool isLoading = true;
     private bool isResetting = false;
+
+    // Real portfolio state
+    private List<RealPortfolioItem> realItems = new();
+    private bool isRealLoading = true;
+    private bool isRealAdding = false;
+    private string realSymbol = "";
+    private double realQty = 1;
+    private double realAvgCost = 0;
+
     private string message = "";
     private bool messageOk = true;
 
+    private class RealPortfolioItem
+    {
+        public string Symbol { get; set; } = "";
+        public double Quantity { get; set; }
+        public double AvgCost { get; set; }
+        public string? UpdatedAt { get; set; }
+    }
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadPortfolio();
+        await Task.WhenAll(LoadPortfolio(), LoadRealPortfolio());
     }
 
     private async Task LoadPortfolio()
     {
         isLoading = true;
+        try { portfolio = await Ajan.GetPortfolioAsync(); }
+        finally { isLoading = false; }
+    }
+
+    private async Task LoadRealPortfolio()
+    {
+        isRealLoading = true;
         try
         {
-            portfolio = await Ajan.GetPortfolioAsync();
+            var client = HttpFactory.CreateClient("BackendApi");
+            var resp = await client.GetAsync("/portfolio/list");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("portfolio", out var arr))
+                {
+                    realItems.Clear();
+                    foreach (var el in arr.EnumerateArray())
+                    {
+                        realItems.Add(new RealPortfolioItem
+                        {
+                            Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() ?? "" : "",
+                            Quantity = el.TryGetProperty("quantity", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetDouble() : 0,
+                            AvgCost = el.TryGetProperty("avg_cost", out var c) && c.ValueKind == JsonValueKind.Number ? c.GetDouble() : 0,
+                            UpdatedAt = el.TryGetProperty("updated_at", out var u) ? u.GetString() : null,
+                        });
+                    }
+                }
+            }
         }
-        finally
+        catch { }
+        finally { isRealLoading = false; }
+    }
+
+    private async Task AddRealPosition()
+    {
+        if (string.IsNullOrWhiteSpace(realSymbol) || realQty <= 0 || realAvgCost <= 0)
         {
-            isLoading = false;
+            message = "Sembol, adet ve maliyet gerekli (pozitif değer)";
+            messageOk = false;
+            return;
         }
+        isRealAdding = true;
+        message = "";
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var body = new { symbol = realSymbol.Trim().ToUpper(), avg_cost = realAvgCost, quantity = realQty };
+            var resp = await client.PostAsJsonAsync("/portfolio/add", body);
+            if (resp.IsSuccessStatusCode)
+            {
+                message = $"✓ {realSymbol.ToUpper()} eklendi";
+                messageOk = true;
+                realSymbol = "";
+                realQty = 1;
+                realAvgCost = 0;
+                await LoadRealPortfolio();
+            }
+            else
+            {
+                message = "✕ Eklenemedi";
+                messageOk = false;
+            }
+        }
+        catch { message = "✕ Bağlantı hatası"; messageOk = false; }
+        finally { isRealAdding = false; }
+    }
+
+    private async Task RemoveRealPosition(string symbol)
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var resp = await client.DeleteAsync($"/portfolio/delete/{symbol}");
+            if (resp.IsSuccessStatusCode)
+            {
+                message = $"✓ {symbol} kaldırıldı";
+                messageOk = true;
+                await LoadRealPortfolio();
+            }
+            else
+            {
+                message = $"✕ {symbol} kaldırılamadı";
+                messageOk = false;
+            }
+        }
+        catch { message = "✕ Bağlantı hatası"; messageOk = false; }
     }
 
     private async Task ResetPortfolio()
@@ -174,7 +405,7 @@
             var ok = await Ajan.ResetPortfolioAsync();
             if (ok)
             {
-                message = "✓ Portföy sıfırlandı ($100,000 nakit)";
+                message = "✓ Simüle portföy sıfırlandı ($100,000 nakit)";
                 messageOk = true;
                 await LoadPortfolio();
             }
@@ -184,9 +415,6 @@
                 messageOk = false;
             }
         }
-        finally
-        {
-            isResetting = false;
-        }
+        finally { isResetting = false; }
     }
 }
