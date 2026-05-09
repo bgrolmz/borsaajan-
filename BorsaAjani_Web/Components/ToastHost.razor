@@ -1,0 +1,57 @@
+@using BorsaAjani_Web.Services
+@inject ToastService Toasts
+@implements IDisposable
+
+<div class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm pointer-events-none">
+    @foreach (var t in Toasts.Items)
+    {
+        <div class="@CardClass(t.Level) pointer-events-auto px-4 py-3 rounded-lg border shadow-lg flex items-start gap-3 animate-fade-in">
+            <span class="material-symbols-outlined text-xl @IconColor(t.Level)">@IconName(t.Level)</span>
+            <div class="flex-1 text-sm leading-snug text-white">@t.Text</div>
+            <button class="text-white/60 hover:text-white text-xs" @onclick="() => Toasts.Dismiss(t.Id)">✕</button>
+        </div>
+    }
+</div>
+
+<style>
+    @@keyframes wf-toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: wf-toast-in .2s ease-out; }
+</style>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Toasts.OnChange += HandleChange;
+    }
+
+    private void HandleChange() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Toasts.OnChange -= HandleChange;
+    }
+
+    private static string CardClass(ToastLevel l) => l switch
+    {
+        ToastLevel.Success => "bg-[#0f2a1f] border-[#00FFA3]/40",
+        ToastLevel.Warning => "bg-[#2a230f] border-[#ffcc00]/40",
+        ToastLevel.Error   => "bg-[#2a0f12] border-[#ff4d4d]/50",
+        _                  => "bg-[#131b2e] border-[#2d3449]"
+    };
+
+    private static string IconColor(ToastLevel l) => l switch
+    {
+        ToastLevel.Success => "text-[#00FFA3]",
+        ToastLevel.Warning => "text-[#ffcc00]",
+        ToastLevel.Error   => "text-[#ff4d4d]",
+        _                  => "text-[#dae2fd]"
+    };
+
+    private static string IconName(ToastLevel l) => l switch
+    {
+        ToastLevel.Success => "check_circle",
+        ToastLevel.Warning => "warning",
+        ToastLevel.Error   => "error",
+        _                  => "info"
+    };
+}
