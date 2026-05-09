@@ -492,7 +492,12 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE news_analysis_history ADD COLUMN comment TEXT")
         except sqlite3.OperationalError:
             pass
-        
+
+        try:
+            cursor.execute("ALTER TABLE news_analysis_history ADD COLUMN title_tr TEXT")
+        except sqlite3.OperationalError:
+            pass
+
         # Create index for faster cooldown queries
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_notification_log_symbol_event_time 
@@ -921,7 +926,7 @@ def save_analysis(
         conn = get_connection()
         cursor = conn.cursor()
         
-        full_analysis_json_str = json.dumps(full_analysis_json, ensure_ascii=False) if full_analysis_json else None
+        full_analysis_json_str = json.dumps(full_analysis_json, ensure_ascii=False, default=str) if full_analysis_json else None
         
         cursor.execute("""
             INSERT INTO analysis_history 
@@ -2246,6 +2251,7 @@ def _parse_news_row(r: dict) -> dict:
         "id": r["id"],
         "symbol": r.get("symbol", ""),
         "title": r["title"],
+        "title_tr": r.get("title_tr") or "",
         "source": r.get("source"),
         "impact": r["expected_impact"],
         "actual_impact": r.get("what_happened"),
@@ -2264,7 +2270,7 @@ def get_news_history(symbol: str, limit: int = 20) -> List[Dict[str, Any]]:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, symbol, title, source, expected_impact, what_happened, confidence,
+            SELECT id, symbol, title, title_tr, source, expected_impact, what_happened, confidence,
                    time_horizon, full_analysis_json, advice, comment, created_at
             FROM news_analysis_history
             WHERE symbol = ?
@@ -2284,7 +2290,7 @@ def get_all_news_history(limit: int = 50) -> List[Dict[str, Any]]:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, symbol, title, source, expected_impact, what_happened, confidence,
+            SELECT id, symbol, title, title_tr, source, expected_impact, what_happened, confidence,
                    time_horizon, full_analysis_json, advice, comment, created_at
             FROM news_analysis_history
             ORDER BY created_at DESC

@@ -2307,7 +2307,7 @@
                                 <span class="text-[#e2e2eb]/40 text-[10px] font-mono uppercase tracking-widest">Sector: @string.Join(" / ", dn.Symbols.Take(3))</span>
                             }
                         </div>
-                        <h1 class="font-['Manrope'] text-4xl lg:text-5xl font-extrabold leading-[1.1] tracking-tight text-[#e2e2eb]">@dn.Title</h1>
+                        <h1 class="font-['Manrope'] text-4xl lg:text-5xl font-extrabold leading-[1.1] tracking-tight text-[#e2e2eb]">@dn.DisplayTitle</h1>
                         <div class="flex items-center gap-6 py-4 border-y border-[#282a30]/50 text-[#e2e2eb]/40 text-xs font-mono uppercase">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-sm">calendar_today</span>
@@ -2454,7 +2454,7 @@
                                         <span class="material-symbols-outlined text-[#00FFA3] text-lg">@relIcon</span>
                                         <span class="font-mono text-[10px] text-[#e2e2eb]/40 uppercase">@(related.Impact == "HIGH" ? "High Impact" : related.Impact == "MEDIUM" ? "Med Impact" : "Low Impact")</span>
                                     </div>
-                                    <h4 class="text-sm font-medium leading-tight group-hover:text-[#00FFA3] transition-colors mb-2">@(related.Title.Length > 65 ? related.Title[..65] + "…" : related.Title)</h4>
+                                    <h4 class="text-sm font-medium leading-tight group-hover:text-[#00FFA3] transition-colors mb-2">@(related.DisplayTitle.Length > 65 ? related.DisplayTitle[..65] + "…" : related.DisplayTitle)</h4>
                                     <div class="flex justify-between items-center text-[10px] font-mono">
                                         <span class="@relSignalColor">SIGNAL: @relSentiment</span>
                                         <span class="text-[#e2e2eb]/20">@related.TimeAgo</span>
@@ -2608,7 +2608,7 @@
                                 </div>
                             </div>
 
-                            <h3 class="text-sm font-bold leading-snug group-hover:text-[#00FFA3] transition-colors">@news.Title</h3>
+                            <h3 class="text-sm font-bold leading-snug group-hover:text-[#00FFA3] transition-colors">@news.DisplayTitle</h3>
 
                             @if (news.Symbols.Any())
                             {
@@ -5343,7 +5343,8 @@
             var s = newsSymbolFilter.Trim();
             q = q.Where(n =>
                 n.Symbols.Any(sy => sy.Contains(s, StringComparison.OrdinalIgnoreCase)) ||
-                n.Title.Contains(s, StringComparison.OrdinalIgnoreCase));
+                n.Title.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                n.TitleTr.Contains(s, StringComparison.OrdinalIgnoreCase));
         }
         if (newsShowOnlyUnread)
             q = q.Where(n => !readNewsIds.Contains(n.Id));
@@ -5401,6 +5402,8 @@
     {
         public int Id { get; set; }
         public string Title { get; set; } = "";
+        public string TitleTr { get; set; } = "";
+        public string DisplayTitle => !string.IsNullOrEmpty(TitleTr) ? TitleTr : Title;
         public string Summary { get; set; } = "";
         public string WhyAnalysis { get; set; } = "";
         public string Impact { get; set; } = "LOW";
@@ -6116,6 +6119,7 @@
                         {
                             Id = item.TryGetProperty("id", out var nid) ? nid.GetInt32() : 0,
                             Title = item.TryGetProperty("title", out var title) ? title.GetString() ?? "" : "",
+                            TitleTr = item.TryGetProperty("title_tr", out var ttr) ? ttr.GetString() ?? "" : "",
                             Reason = item.TryGetProperty("reason", out var reason) ? reason.GetString() ?? "" : "",
                             WhyAnalysis = item.TryGetProperty("comment", out var cmt) ? cmt.GetString() ?? "" : "",
                             Summary = item.TryGetProperty("advice", out var adv) ? adv.GetString() ?? "" : "",
@@ -6152,7 +6156,7 @@
         try
         {
             var client = HttpClientFactory.CreateClient("BackendApi");
-            var titles = newsItems.Select(n => n.Title).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(15).ToList();
+            var titles = newsItems.Where(n => string.IsNullOrEmpty(n.TitleTr)).Select(n => n.Title).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(15).ToList();
             if (!titles.Any()) return;
             var body = System.Text.Json.JsonSerializer.Serialize(new { titles });
             var content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "application/json");
@@ -6162,13 +6166,13 @@
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             if (doc.RootElement.TryGetProperty("translations", out var translations))
             {
-                foreach (var item in newsItems)
+                foreach (var item in newsItems.Where(n => string.IsNullOrEmpty(n.TitleTr)))
                 {
                     if (translations.TryGetProperty(item.Title, out var tr) && tr.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
                         var trText = tr.GetString();
                         if (!string.IsNullOrEmpty(trText))
-                            item.Title = trText;
+                            item.TitleTr = trText;
                     }
                 }
                 await InvokeAsync(StateHasChanged);

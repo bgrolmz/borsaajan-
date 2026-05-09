@@ -342,7 +342,8 @@ Bollinger Alt Band (Destek): {bb_lower}
   "what_happened": "Ne oldu? Tek cümle.",
   "why_it_matters": "Neden önemli? Tek cümle.",
   "mentor_action": "Yatırımcı ne yapmalı? Tek cümle.",
-  "risk": "En önemli risk. Tek cümle."
+  "risk": "En önemli risk. Tek cümle.",
+  "title_tr": "Haber başlığının Türkçe çevirisi (max 120 karakter)."
 }}"""
 
         print(f"🤖 [NEWS LLM] Enriching: {symbol} — price={price} rsi={rsi} — '{title[:50]}'")
@@ -459,18 +460,19 @@ def save_news_analysis_to_db(news_item: Dict[str, Any], analysis: Dict[str, Any]
         
         advice = analysis.get("strategic_advice", "")
         comment = analysis.get("comment", "")
+        title_tr = analysis.get("title_tr", "") or ""
         full_analysis_json = json.dumps(analysis, ensure_ascii=False)
 
         cursor.execute("""
             INSERT OR REPLACE INTO news_analysis_history (
-                symbol, news_hash, title, source, published_date,
+                symbol, news_hash, title, title_tr, source, published_date,
                 local_score, llm_enriched, mentor_summary,
                 what_happened, why_it_matters, mentor_action, risk_note,
                 expected_impact, action_hint, confidence, time_horizon,
                 full_analysis_json, advice, comment
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            symbol, news_hash, title, source, published_date,
+            symbol, news_hash, title, title_tr, source, published_date,
             local_score, llm_enriched, mentor_summary,
             what_happened, why_it_matters, mentor_action, risk_note,
             expected_impact, action_hint, confidence, time_horizon,

@@ -2503,9 +2503,9 @@ def analyze_stock(req: AnalyzeRequest):
         from .database import save_analysis as _save_analysis
         mode = "CRYPTO" if "-USD" in (req.symbol or "").upper() else "STOCK"
         summary = (result.get("ai_commentary") or result.get("summary") or "")[:500]
-        decision = (result.get("decision") or "").upper()
-        risk_level = 3 if decision in ("BUY", "AL") else (1 if decision in ("SELL", "SAT") else 2)
-        price_at = float(result.get("current_price") or result.get("price") or 0.0)
+        verdict = (result.get("verdict") or result.get("decision") or "").upper()
+        risk_level = 3 if verdict in ("AL", "BUY") else (1 if verdict in ("SAT/KACIN", "SAT", "SELL") else 2)
+        price_at = float(result.get("price") or result.get("current_price") or 0.0)
         _save_analysis(
             symbol=req.symbol,
             mode=mode,
@@ -2516,8 +2516,10 @@ def analyze_stock(req: AnalyzeRequest):
             full_analysis_json=result,
             price_at_analysis=price_at,
         )
+        print(f"[analyze] saved: {req.symbol} mode={mode} risk={risk_level} price={price_at}")
     except Exception as e:
-        print(f"[analyze] save_analysis failed: {e}")
+        import traceback
+        print(f"[analyze] save_analysis FAILED: {e}\n{traceback.format_exc()}")
     return result
 
 @app.get("/analyze/{symbol}")
