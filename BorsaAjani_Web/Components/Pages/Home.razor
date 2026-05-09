@@ -5993,7 +5993,39 @@
                 LoadNewsFromAnalysis();
             isLoadingNotifications = false;
             StateHasChanged();
+            if (newsItems.Any())
+                _ = TranslateNewsItemsAsync();
         }
+    }
+
+    private async Task TranslateNewsItemsAsync()
+    {
+        try
+        {
+            var client = HttpClientFactory.CreateClient("BackendApi");
+            var titles = newsItems.Select(n => n.Title).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(15).ToList();
+            if (!titles.Any()) return;
+            var body = System.Text.Json.JsonSerializer.Serialize(new { titles });
+            var content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "application/json");
+            var resp = await client.PostAsync("/news/translate", content);
+            if (!resp.IsSuccessStatusCode) return;
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("translations", out var translations))
+            {
+                foreach (var item in newsItems)
+                {
+                    if (translations.TryGetProperty(item.Title, out var tr) && tr.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var trText = tr.GetString();
+                        if (!string.IsNullOrEmpty(trText))
+                            item.Title = trText;
+                    }
+                }
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { }
     }
 
     private void LoadNewsFromAnalysis()

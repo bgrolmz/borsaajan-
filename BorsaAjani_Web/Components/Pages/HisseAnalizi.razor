@@ -4,8 +4,11 @@
 @using BorsaAjani_Web.Models
 @using BorsaAjani_Web.Services
 @using Microsoft.AspNetCore.Components.Web
+@using System.Net.Http.Json
+@using System.Text.Json
 @inject FinansalAjanService Ajan
 @inject NavigationManager Nav
+@inject IHttpClientFactory HttpFactory
 
 <PageTitle>Hisse Analizi — Borsa Ajanı</PageTitle>
 
@@ -527,47 +530,74 @@
                 <span class="sk-tag" style="color:var(--wf-mentor);">● online</span>
             </div>
             <div class="mentor-stream">
-                @if (result != null && result.Success)
+                @if (!mentorMessages.Any())
                 {
-                    var ev = result.Ev?.Value ?? 0;
-                    var kf = result.Kelly?.QuarterPct ?? 0;
-                    <div class="mentor-bubble">
-                        @if (ev > 0)
-                        {
-                            <b style="color:var(--wf-mentor);">EV pozitif (+$@(ev.ToString("F2")))</b>
-                        }
-                        else
-                        {
-                            <b style="color:var(--wf-sell);">EV negatif ($@(ev.ToString("F2")))</b>
-                        }
-                        @if (kf > 0)
-                        {
-                            <span> · Kelly fraction <b>%@(kf.ToString("F1"))</b> — pozisyon buna göre ayarla.</span>
-                        }
-                    </div>
-                    @if (!string.IsNullOrEmpty(result.AiCommentary))
+                    @if (result != null && result.Success)
+                    {
+                        var ev = result.Ev?.Value ?? 0;
+                        var kf = result.Kelly?.QuarterPct ?? 0;
+                        <div class="mentor-bubble">
+                            @if (ev > 0)
+                            {
+                                <b style="color:var(--wf-mentor);">EV pozitif (+$@(ev.ToString("F2")))</b>
+                            }
+                            else
+                            {
+                                <b style="color:var(--wf-sell);">EV negatif ($@(ev.ToString("F2")))</b>
+                            }
+                            @if (kf > 0)
+                            {
+                                <span> · Kelly fraction <b>%@(kf.ToString("F1"))</b> — pozisyon buna göre ayarla.</span>
+                            }
+                        </div>
+                        <div class="mentor-bubble" style="color:var(--wf-ink-mute); font-size:12px;">
+                            Analiz hazır. Aşağıdan soru sor veya konuya göre chip'e tıkla.
+                        </div>
+                    }
+                    else
                     {
                         <div class="mentor-bubble">
-                            @result.AiCommentary
+                            Merhaba! Bir sembol analiz et, sonra bana istediğini sor.<br/>
+                            <span style="color:var(--wf-ink-mute); font-size:12px;">Bağımsız çalışıyorum — analiz beklemeden de soru sorabilirsin.</span>
                         </div>
                     }
                 }
-                else
+                @foreach (var msg in mentorMessages)
                 {
-                    <div class="mentor-bubble">
-                        Analiz sonucunu bekliyor…<br/>
-                        <span style="color:var(--wf-ink-mute); font-size:12px;">Sembol girip analiz et butonu ile başla.</span>
+                    @if (msg.IsUser)
+                    {
+                        <div class="mentor-bubble" style="background:var(--wf-buy-soft); color:var(--wf-buy); text-align:right; margin-left:12px;">
+                            @msg.Text
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mentor-bubble">
+                            @msg.Text
+                        </div>
+                    }
+                }
+                @if (isMentorLoading)
+                {
+                    <div class="mentor-bubble" style="color:var(--wf-ink-mute);">
+                        <span style="font-family:var(--f-mono); font-size:11px;">⏳ Mentor düşünüyor…</span>
                     </div>
                 }
             </div>
             <div class="mentor-suggested">
-                <span class="wf-chip">Neden Kelly düşük?</span>
-                <span class="wf-chip">EV nasıl hesaplandı?</span>
-                <span class="wf-chip">Risk planı kur</span>
+                <span class="wf-chip" @onclick='() => SendChip("Neden Kelly düşük?")'>Neden Kelly düşük?</span>
+                <span class="wf-chip" @onclick='() => SendChip("EV nasıl hesaplandı?")'>EV nasıl hesaplandı?</span>
+                <span class="wf-chip" @onclick='() => SendChip("Risk planı öner")'>Risk planı öner</span>
             </div>
-            <div class="mentor-input-row">
-                <span style="opacity:0.5;">Mentor'a sor… (Faza 7)</span>
-                <span style="margin-left:auto; font-family:var(--f-mono); font-size:11px; color:var(--wf-mentor);">⌘K</span>
+            <div class="mentor-input-row" style="display:flex; gap:6px; align-items:center;">
+                <input @bind="mentorInput" @bind:event="oninput" @onkeydown="HandleMentorKey"
+                       placeholder="Mentor'a sor…"
+                       style="flex:1; background:transparent; border:none; font-family:var(--f-hand); font-size:13px; color:var(--wf-ink); outline:none;"
+                       disabled="@isMentorLoading" />
+                <button @onclick="SendMentorMessage" disabled="@(isMentorLoading || string.IsNullOrWhiteSpace(mentorInput))"
+                        style="background:var(--wf-mentor); color:#000; border:none; border-radius:4px; padding:4px 10px; font-family:var(--f-hand); font-size:12px; cursor:pointer; opacity:@(isMentorLoading || string.IsNullOrWhiteSpace(mentorInput) ? "0.4" : "1");">
+                    ↑
+                </button>
             </div>
         </div>
 
@@ -626,6 +656,12 @@
     private string? tradeMsg;
     private bool tradeSuccess;
     private bool isAddingWatch = false;
+
+    // Mentor chat
+    private record MentorMessage(string Text, bool IsUser);
+    private List<MentorMessage> mentorMessages = new();
+    private string mentorInput = "";
+    private bool isMentorLoading = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -738,6 +774,64 @@
         finally
         {
             isAddingWatch = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleMentorKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isMentorLoading && !string.IsNullOrWhiteSpace(mentorInput))
+            await SendMentorMessage();
+    }
+
+    private async Task SendChip(string question)
+    {
+        mentorInput = question;
+        await SendMentorMessage();
+    }
+
+    private async Task SendMentorMessage()
+    {
+        var question = mentorInput.Trim();
+        if (string.IsNullOrEmpty(question) || isMentorLoading) return;
+        mentorInput = "";
+        isMentorLoading = true;
+        mentorMessages.Add(new MentorMessage(question, true));
+        StateHasChanged();
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var contextData = new Dictionary<string, object>();
+            if (result != null && result.Success)
+            {
+                contextData["symbol"] = result.Symbol ?? "";
+                contextData["decision"] = result.Decision ?? "";
+                contextData["ev"] = result.Ev?.Value ?? 0;
+                contextData["kelly_pct"] = result.Kelly?.QuarterPct ?? 0;
+            }
+            var body = new { user_message = question, context_data = contextData };
+            var resp = await client.PostAsJsonAsync("/mentor/chat", body);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                var reply = doc.RootElement.TryGetProperty("reply", out var r) && r.ValueKind == JsonValueKind.String
+                    ? r.GetString()
+                    : "Mentor yanıt veremedi.";
+                mentorMessages.Add(new MentorMessage(reply ?? "Mentor yanıt veremedi.", false));
+            }
+            else
+            {
+                mentorMessages.Add(new MentorMessage("Sunucuya ulaşılamadı.", false));
+            }
+        }
+        catch
+        {
+            mentorMessages.Add(new MentorMessage("Bağlantı hatası.", false));
+        }
+        finally
+        {
+            isMentorLoading = false;
             StateHasChanged();
         }
     }
