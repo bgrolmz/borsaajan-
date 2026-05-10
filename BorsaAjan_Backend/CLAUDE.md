@@ -27,7 +27,43 @@
 
 **Impact:** News titles now persist Turkish translation in DB, no re-translation on page refresh
 
-## Next: Session 2
+## Session 2 ✅ (2025-05-10)
 
-1. **Watchlist anlık fiyat+değişim** — /watchlist/quotes endpoint, batch yfinance
-2. **Portföy Gerçek+Simüle ayır** — new DB table real_portfolio, 2-tab refactor
+**Tasks:** Watchlist instant quotes + Portfolio real transactions UI
+
+### #1 Watchlist anlık fiyat — Fast batch endpoint
+
+**Problem:** `/api/watchlist/sync` slow — per-symbol `history(3mo)` loop (~20-30s per symbol)
+
+**Solution:**
+- New `GET /watchlist/quotes` — batch `yf.download(period="2d")` single HTTP call
+- Mentor tag: `change% > 1.5%` → "Al Fırsatı", `< -1.5%` → "Dikkat", else → "İzle"
+- `Watchlist.razor RefreshQuotes()` — POST → GET (same response format)
+
+**Impact:** Watchlist refresh ~10x faster (2-3s vs 20-30s)
+
+**Commits:**
+- `a0a996d` feat(watchlist): fast batch quotes endpoint + wire frontend
+
+### #2 Portfolio real transaction history
+
+**Problem:** Real portföy transactions logged nowhere. Only paper trading had history.
+
+**Solution:**
+- `/portfolio/add` → use `add_portfolio_transaction("BUY")` instead of direct `add_to_portfolio`
+- `/portfolio/delete` → log SELL at current market price via yfinance
+- New `GET /portfolio/transactions` → query portfolio_transactions table (BUY/SELL history)
+- `PaperTrading.razor` — "Geçmiş İşlemler" tab split into Gerçek/Simüle sub-tabs
+  - Real: call `/portfolio/transactions`, render BUY/SELL table + summary cards
+  - Paper: existing `/paper/trades` logic (unchanged)
+  - Sub-tab toggle: `SwitchHistorySub()` loads lazy
+
+**Impact:** Real portfolio now has auditable transaction log with timestamps, quantities, prices
+
+**Commits:**
+- `360a437` feat(portfolio): real transaction history + GET /portfolio/transactions
+
+## Next: Session 3
+
+1. TBD — check project_next_sessions.md
+2. Escalate model (Sonnet 4.6 high effort tasks)
