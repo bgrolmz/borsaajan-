@@ -1,5 +1,6 @@
 import sys
 import os
+import sqlite3
 # NOTE: main.py does NOT need genai import - all LLM calls go through logic.py
 # The logic.py module uses the new google-genai SDK with dynamic model discovery
 
@@ -17,7 +18,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from .logic import generate_ai_report, get_market_data_fast, get_ai_insight, create_chart, analyze_portfolio, backtest_lite, whale_watch, chat_with_mentor, gemini_text, FALLBACK_AI_MESSAGE, get_canonical_quick_analysis, get_canonical_deep_analysis, get_mentor_news, analyze_news_with_gemini
-from .database import add_test_data, add_to_portfolio, remove_from_portfolio, get_portfolio, get_all_history, get_notifications, init_db, get_user_profile, update_user_profile, get_portfolio_analysis_history, get_db_path, get_monthly_llm_usage, get_connection, get_connection, get_watched_symbols, add_watched_symbol, remove_watched_symbol, get_news_history, get_all_news_history, get_similar_news_outcomes, save_price_snapshot, get_pending_snapshots, mark_snapshot_done, save_news_outcome
+from .database import add_test_data, add_to_portfolio, remove_from_portfolio, get_portfolio, get_all_history, get_notifications, init_db, get_user_profile, update_user_profile, get_portfolio_analysis_history, get_db_path, get_monthly_llm_usage, get_connection, get_connection, get_watched_symbols, add_watched_symbol, remove_watched_symbol, get_news_history, get_all_news_history, get_similar_news_outcomes, save_price_snapshot, get_pending_snapshots, mark_snapshot_done, save_news_outcome, add_portfolio_transaction
 from .chat_helpers import should_use_llm, llm_explain
 
 # region agent log
@@ -833,24 +834,71 @@ class PortfolioItem(BaseModel):
 
 @app.post("/portfolio/add")
 def portfolio_add(item: PortfolioItem):
-    """Add or update a stock in the portfolio."""
+    """Add or update a stock in the portfolio. Also logs a BUY transaction."""
     try:
-        result = add_to_portfolio(item.symbol, item.avg_cost, item.quantity)
+        # Use add_portfolio_transaction to log the BUY in portfolio_transactions table
+        result = add_portfolio_transaction(item.symbol, item.quantity, item.avg_cost, "BUY")
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/portfolio/delete/{symbol}")
 def portfolio_delete(symbol: str, quantity: float = None):
-    """Remove a stock from portfolio (partial or full)."""
+    """Remove a stock from portfolio (partial or full). Also logs a SELL transaction at current market price."""
     try:
-        result = remove_from_portfolio(symbol, quantity)
+        # Determine quantity to sell — full position if not specified
+        sell_qty = quantity
+        if sell_qty is None:
+            current = get_portfolio()
+            existing = next((p for p in current if p.get("symbol", "").upper() == symbol.upper().strip()), None)
+            if not existing:
+                raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found in portfolio")
+            sell_qty = float(existing.get("quantity") or 0)
+
+        # Fetch current market price for SELL transaction logging
+        from .paper_trading import get_current_price
+        sell_price = get_current_price(symbol.upper().strip())
+        if not sell_price:
+            # Fallback to avg_cost if price unavailable (P&L will be 0)
+            current = get_portfolio()
+            existing = next((p for p in current if p.get("symbol", "").upper() == symbol.upper().strip()), None)
+            sell_price = float(existing.get("avg_cost") or 0) if existing else 0.0
+
+        result = add_portfolio_transaction(symbol, sell_qty, sell_price, "SELL")
         if not result.get("success"):
             raise HTTPException(status_code=404, detail=result.get("message"))
         return result
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/portfolio/transactions")
+def portfolio_transactions(limit: int = 100):
+    """Get real portfolio transaction history (BUY/SELL log)."""
+    try:
+        conn = get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, symbol, quantity, price, transaction_type, created_at
+            FROM portfolio_transactions
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+
+        transactions = []
+        for r in rows:
+            d = dict(r)
+            d["total"] = round(float(d["quantity"]) * float(d["price"]), 2)
+            transactions.append(d)
+
+        return {"success": True, "transactions": transactions, "count": len(transactions)}
+    except Exception as e:
+        import traceback
+        print(f"[portfolio/transactions] ERROR: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/portfolio/list")

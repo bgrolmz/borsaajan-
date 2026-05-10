@@ -339,11 +339,93 @@
         }
 
         @* ══════════════════════════════════════════════
-           İŞLEM GEÇMİŞİ TAB
+           İŞLEM GEÇMİŞİ TAB (Gerçek / Simüle sub-tabs)
            ══════════════════════════════════════════════ *@
         @if (activeTab == "history")
         {
-            @if (isTradesLoading)
+            @* Sub-tab toggle *@
+            <div style="display:flex; gap:6px; margin-bottom:14px;">
+                <button @onclick='() => SwitchHistorySub("gercek")'
+                        class="wf-btn xs @(historySubTab == "gercek" ? "primary" : "")">
+                    💼 Gerçek İşlemler
+                </button>
+                <button @onclick='() => SwitchHistorySub("simule")'
+                        class="wf-btn xs @(historySubTab == "simule" ? "primary" : "")">
+                    ▣ Simüle İşlemler
+                </button>
+            </div>
+
+            @* Real transactions sub-tab *@
+            @if (historySubTab == "gercek")
+            {
+                @if (isRealTxLoading)
+                {
+                    <div style="text-align:center; padding:40px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">⏳ Yükleniyor…</div>
+                }
+                else if (!realTransactions.Any())
+                {
+                    <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
+                        <div style="font-size:38px; opacity:0.3;">💼</div>
+                        <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim);">Henüz gerçek işlem yok</div>
+                        <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); margin-top:6px;">Gerçek Portföy tabında pozisyon ekle/sil</div>
+                    </div>
+                }
+                else
+                {
+                    var rBuys = realTransactions.Count(t => t.TransactionType == "BUY");
+                    var rSells = realTransactions.Count(t => t.TransactionType == "SELL");
+                    <div class="sk-grid-3" style="margin-bottom:14px;">
+                        <div class="sk-card">
+                            <div class="sk-card-h"><span class="sk-h-title">Toplam İşlem</span></div>
+                            <span class="sk-num sk-num-xl">@realTransactions.Count</span>
+                            <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@rBuys AL · @rSells SAT</div>
+                        </div>
+                        <div class="sk-card">
+                            <div class="sk-card-h"><span class="sk-h-title">Toplam AL Değeri</span></div>
+                            <span class="sk-num sk-num-xl" style="color:var(--wf-buy);">$@realTransactions.Where(t => t.TransactionType == "BUY").Sum(t => t.Total).ToString("F2")</span>
+                        </div>
+                        <div class="sk-card">
+                            <div class="sk-card-h"><span class="sk-h-title">Toplam SAT Değeri</span></div>
+                            <span class="sk-num sk-num-xl" style="color:var(--wf-sell);">$@realTransactions.Where(t => t.TransactionType == "SELL").Sum(t => t.Total).ToString("F2")</span>
+                        </div>
+                    </div>
+
+                    <div class="sk-card">
+                        <div class="sk-card-h">
+                            <span class="sk-h-title">İşlemler</span>
+                            <span class="sk-h-meta">en yeni → en eski · @realTransactions.Count adet</span>
+                        </div>
+                        <table style="width:100%; border-collapse:collapse;">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--wf-border);">
+                                    <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Zaman</th>
+                                    <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Sembol</th>
+                                    <th style="text-align:left; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Aksiyon</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Adet</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Fiyat</th>
+                                    <th style="text-align:right; padding:8px 4px; font-family:var(--f-mono); font-size:10px; color:var(--wf-ink-mute); text-transform:uppercase;">Toplam</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in realTransactions)
+                                {
+                                    var isBuy = t.TransactionType == "BUY";
+                                    var actColor = isBuy ? "var(--wf-buy)" : "var(--wf-sell)";
+                                    <tr style="border-bottom:1px dashed var(--wf-border);">
+                                        <td style="padding:8px 4px; font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">@FormatTime(t.CreatedAt)</td>
+                                        <td style="padding:8px 4px; font-family:var(--f-hand); font-size:14px; font-weight:600;">@t.Symbol</td>
+                                        <td style="padding:8px 4px; font-family:var(--f-mono); font-size:11px; font-weight:700; color:@actColor;">@(isBuy ? "▲ AL" : "▼ SAT")</td>
+                                        <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">@t.Quantity.ToString("F4")</td>
+                                        <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@t.Price.ToString("F2")</td>
+                                        <td style="padding:8px 4px; text-align:right; font-family:var(--f-mono); font-size:12px;">$@t.Total.ToString("F2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+            else if (isTradesLoading)
             {
                 <div style="text-align:center; padding:40px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">⏳ Yükleniyor…</div>
             }
@@ -351,7 +433,7 @@
             {
                 <div class="sk-card dashed" style="text-align:center; padding:50px 20px;">
                     <div style="font-size:38px; opacity:0.3;">📜</div>
-                    <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim);">Henüz işlem yok</div>
+                    <div style="font-family:var(--f-hand); font-size:18px; color:var(--wf-ink-dim);">Henüz simüle işlem yok</div>
                     <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute); margin-top:6px;">Simüle tabında AL/SAT yap</div>
                 </div>
             }
@@ -507,6 +589,23 @@
     private List<PaperTrade> trades = new();
     private bool isTradesLoading = false;
     private bool tradesLoaded = false;
+
+    // History tab sub-state
+    private string historySubTab = "gercek";
+    private List<RealTransaction> realTransactions = new();
+    private bool isRealTxLoading = false;
+    private bool realTxLoaded = false;
+
+    private class RealTransaction
+    {
+        public int Id { get; set; }
+        public string Symbol { get; set; } = "";
+        public double Quantity { get; set; }
+        public double Price { get; set; }
+        public double Total { get; set; }
+        public string TransactionType { get; set; } = "BUY";
+        public string CreatedAt { get; set; } = "";
+    }
 
     // SL/TP per symbol
     private Dictionary<string, StopThreshold> stops = new();
@@ -682,6 +781,7 @@
                 realQty = 1;
                 realAvgCost = 0;
                 await LoadRealPortfolio();
+                realTxLoaded = false; // invalidate history cache so it reloads on next view
             }
             else
             {
@@ -704,6 +804,7 @@
                 message = $"✓ {symbol} kaldırıldı";
                 messageOk = true;
                 await LoadRealPortfolio();
+                realTxLoaded = false; // invalidate history cache so it reloads on next view
             }
             else
             {
@@ -768,7 +869,16 @@
     private async Task SwitchToHistory()
     {
         activeTab = "history";
-        if (!tradesLoaded) await LoadTrades();
+        // Load default sub-tab data
+        if (historySubTab == "gercek" && !realTxLoaded) await LoadRealTransactions();
+        else if (historySubTab == "simule" && !tradesLoaded) await LoadTrades();
+    }
+
+    private async Task SwitchHistorySub(string sub)
+    {
+        historySubTab = sub;
+        if (sub == "gercek" && !realTxLoaded) await LoadRealTransactions();
+        else if (sub == "simule" && !tradesLoaded) await LoadTrades();
     }
 
     private async Task LoadTrades()
@@ -776,6 +886,43 @@
         isTradesLoading = true;
         try { trades = await Ajan.GetTradesAsync(200); }
         finally { isTradesLoading = false; tradesLoaded = true; }
+    }
+
+    private async Task LoadRealTransactions()
+    {
+        isRealTxLoading = true;
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var resp = await client.GetAsync("/portfolio/transactions?limit=200");
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                realTransactions.Clear();
+                if (doc.RootElement.TryGetProperty("transactions", out var arr))
+                {
+                    foreach (var el in arr.EnumerateArray())
+                    {
+                        realTransactions.Add(new RealTransaction
+                        {
+                            Id = el.TryGetProperty("id", out var i) ? i.GetInt32() : 0,
+                            Symbol = el.TryGetProperty("symbol", out var s) ? s.GetString() ?? "" : "",
+                            Quantity = el.TryGetProperty("quantity", out var q) && q.ValueKind == JsonValueKind.Number ? q.GetDouble() : 0,
+                            Price = el.TryGetProperty("price", out var p) && p.ValueKind == JsonValueKind.Number ? p.GetDouble() : 0,
+                            Total = el.TryGetProperty("total", out var t) && t.ValueKind == JsonValueKind.Number ? t.GetDouble() : 0,
+                            TransactionType = el.TryGetProperty("transaction_type", out var tt) ? tt.GetString() ?? "BUY" : "BUY",
+                            CreatedAt = el.TryGetProperty("created_at", out var c) ? c.GetString() ?? "" : "",
+                        });
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"LoadRealTransactions error: {ex.Message}");
+        }
+        finally { isRealTxLoading = false; realTxLoaded = true; }
     }
 
     private static string FormatTime(string? iso)
