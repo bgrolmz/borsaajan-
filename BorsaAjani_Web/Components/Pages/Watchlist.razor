@@ -279,7 +279,8 @@
         try
         {
             var client = HttpFactory.CreateClient("BackendApi");
-            var resp = await client.PostAsync("/api/watchlist/sync", null);
+            // Fast batch endpoint — yf.download 2-day window instead of per-symbol 3-month history
+            var resp = await client.GetAsync("/watchlist/quotes");
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadAsStringAsync();

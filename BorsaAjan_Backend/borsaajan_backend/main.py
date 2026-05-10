@@ -1088,6 +1088,67 @@ def remove_from_watchlist_api(symbol: str):
         return {"status": "failed", "symbol": symbol.upper(), "error": str(e)}
 
 
+@app.get("/watchlist/quotes")
+def get_watchlist_quotes():
+    """Fast batch price quotes for all watched symbols using yf.download (2-day window)."""
+    try:
+        import yfinance as yf
+
+        watched = get_watched_symbols()
+        if not watched:
+            return {"success": True, "data": []}
+
+        symbols = [item["symbol"] for item in watched]
+        tickers_str = " ".join(symbols)
+
+        # Batch download — much faster than individual Ticker.history(3mo) calls
+        hist = yf.download(tickers_str, period="2d", auto_adjust=True, progress=False)
+
+        results = []
+        for item in watched:
+            sym = item["symbol"]
+            try:
+                if len(symbols) == 1:
+                    closes = hist["Close"]
+                else:
+                    closes = hist["Close"][sym]
+
+                closes = closes.dropna()
+                if len(closes) < 1:
+                    continue
+
+                current_price = float(closes.iloc[-1])
+                change_percent = 0.0
+                if len(closes) >= 2:
+                    prev = float(closes.iloc[-2])
+                    if prev > 0:
+                        change_percent = ((current_price - prev) / prev) * 100
+
+                # Simple mentor tag based on change magnitude
+                if change_percent > 1.5:
+                    mentor_tag = "Al Fırsatı"
+                elif change_percent < -1.5:
+                    mentor_tag = "Dikkat"
+                else:
+                    mentor_tag = "İzle"
+
+                results.append({
+                    "symbol": sym,
+                    "price": round(current_price, 2),
+                    "change_percent": round(change_percent, 2),
+                    "mentor_tag": mentor_tag,
+                })
+            except Exception as sym_err:
+                print(f"[watchlist/quotes] {sym}: {sym_err}")
+                continue
+
+        return {"success": True, "data": results}
+    except Exception as e:
+        import traceback
+        print(f"[watchlist/quotes] ERROR: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/hermes/news/process")
 def process_hermes_news(force: int = 0):
     """
