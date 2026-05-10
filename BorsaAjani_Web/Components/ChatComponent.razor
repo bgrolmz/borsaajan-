@@ -77,52 +77,24 @@
     private List<ChatMessage> messages = new();
     private string? chatUnavailableReason;
 
-    // #region agent log
-    private static void AgentLog(string location, string message, object? data, string hypothesisId, string runId = "pre")
-    {
-        try
-        {
-            var payload = new
-            {
-                sessionId = "debug-session",
-                runId,
-                hypothesisId,
-                location,
-                message,
-                data,
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-            };
-            System.IO.Directory.CreateDirectory(@"c:\Users\msi-nb\Desktop\Borsa_Projem\.cursor");
-            System.IO.File.AppendAllText(
-                @"c:\Users\msi-nb\Desktop\Borsa_Projem\.cursor\debug.log",
-                System.Text.Json.JsonSerializer.Serialize(payload) + Environment.NewLine
-            );
-        }
-        catch
-        {
-            // never throw from debug logging
-        }
-    }
-    // #endregion
-    
-    
     private class ChatMessage
     {
         public string Text { get; set; } = "";
-        public string Type { get; set; } = "user"; // "user" or "bot"
+        public string Type { get; set; } = "user"; // CSS class: "user" or "bot"
+        public string Role { get; set; } = "user"; // API role: "user" or "assistant"
         public DateTime Time { get; set; } = DateTime.Now;
     }
-    
+
     private void ToggleChat(MouseEventArgs e)
     {
         isOpen = !isOpen;
         if (isOpen && messages.Count == 0)
         {
-            // Add welcome message
             messages.Add(new ChatMessage
             {
-                Text = "Merhaba! Ben AI Yatırım Mentor'unuz. Hangi hisse hakkında soru sormak istersiniz?",
+                Text = "Merhaba! Ben Mentor — kıdemli portföy yöneticiniz. Hangi hisse ya da yatırım konusunda konuşalım?",
                 Type = "bot",
+                Role = "assistant",
                 Time = DateTime.Now
             });
         }
@@ -131,268 +103,57 @@
     
     private async Task SendMessage()
     {
-        if (string.IsNullOrWhiteSpace(currentMessage) || isLoading)
-            return;
-        
-        // Add user message
-        var userMsg = new ChatMessage
-        {
-            Text = currentMessage,
-            Type = "user",
-            Time = DateTime.Now
-        };
-        messages.Add(userMsg);
-        
-        string messageToSend = currentMessage;
+        if (string.IsNullOrWhiteSpace(currentMessage) || isLoading) return;
+
+        var userText = currentMessage.Trim();
+        messages.Add(new ChatMessage { Text = userText, Type = "user", Role = "user", Time = DateTime.Now });
         currentMessage = "";
         isLoading = true;
         chatUnavailableReason = null;
         StateHasChanged();
-        
-        // Scroll to bottom
-        await Task.Delay(100);
         await ScrollToBottom();
-        
+
         try
         {
             var client = HttpClientFactory.CreateClient("BackendApi");
-            AgentLog(
-                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                message: "SendMessage entry",
-                data: new { baseUrl = client.BaseAddress?.ToString(), messageLen = messageToSend.Length },
-                hypothesisId: "A"
-            );
-            
-            // Get context data from service
-            var contextData = ContextService.GetContext();
-            AgentLog(
-                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                message: "Context snapshot",
-                data: new { hasContext = contextData is not null, contextKeys = contextData?.Keys?.ToArray() },
-                hypothesisId: "D"
-            );
-            
-            // Ensure context_data is always a dictionary (not null)
-            // Backend expects a dictionary, so send empty dict if null
-            var contextDict = contextData ?? new Dictionary<string, object>();
-            
-            // Prepare request with context data
-            var requestBody = new
-            {
-                user_message = messageToSend,
-                context_data = contextDict
-            };
-            
-            string json;
-            try
-            {
-                json = JsonSerializer.Serialize(requestBody);
-            }
-            catch (Exception serEx)
-            {
-                AgentLog(
-                    location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                    message: "Request serialization failed",
-                    data: new { exType = serEx.GetType().Name, serEx.Message },
-                    hypothesisId: "D"
-                );
-                throw;
-            }
+
+            // Build conversation history for multi-turn context (all but last user msg)
+            var history = messages
+                .Take(messages.Count - 1)
+                .Select(m => new { role = m.Role, text = m.Text })
+                .ToList();
+
+            // Context from current analysis (symbol, price, decision etc)
+            var contextDict = ContextService.GetContext() ?? new Dictionary<string, object>();
+
+            var requestBody = new { user_message = userText, context_data = contextDict, history };
+            var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            
-            AgentLog(
-                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                message: "POST /chat",
-                data: new { path = "/chat", bodyLen = json.Length },
-                hypothesisId: "A"
-            );
-            var response = await client.PostAsync("/chat", content);
-            AgentLog(
-                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                message: "POST /chat completed",
-                data: new { status = (int)response.StatusCode, reason = response.ReasonPhrase },
-                hypothesisId: "B"
-            );
-            
+
+            var response = await client.PostAsync("/mentor/chat", content);
+            string reply;
+
             if (response.IsSuccessStatusCode)
             {
-                var responseJson = await response.Content.ReadAsStringAsync();
-                Dictionary<string, JsonElement>? result = null;
-                try
-                {
-                    result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson);
-                }
-                catch (Exception parseEx)
-                {
-                    AgentLog(
-                        location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                        message: "Response JSON parse failed",
-                        data: new { exType = parseEx.GetType().Name, parseEx.Message, bodyFirst200 = responseJson.Substring(0, Math.Min(200, responseJson.Length)) },
-                        hypothesisId: "C"
-                    );
-                    throw;
-                }
-                
-                if (result != null)
-                {
-                    AgentLog(
-                        location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                        message: "Parsed response keys",
-                        data: new { keys = result.Keys.ToArray() },
-                        hypothesisId: "C"
-                    );
-                    string botResponse = "Üzgünüm, cevap alınamadı.";
-
-                    // Preferred: structured mentor contract
-                    if (result.TryGetValue("decision", out var decEl) && decEl.ValueKind == JsonValueKind.String)
-                    {
-                        var decision = decEl.GetString() ?? "HOLD";
-                        var conf = result.TryGetValue("confidence", out var confEl) && confEl.ValueKind == JsonValueKind.Number ? confEl.GetInt32() : 50;
-                        var horizon = result.TryGetValue("horizon_days", out var hEl) && hEl.ValueKind == JsonValueKind.Number ? hEl.GetInt32() : 7;
-                        var riskNote = result.TryGetValue("risk_note", out var rnEl) && rnEl.ValueKind == JsonValueKind.String ? rnEl.GetString() ?? "" : "";
-                        var scenario = result.TryGetValue("mentor_scenario", out var msEl) && msEl.ValueKind == JsonValueKind.String ? msEl.GetString() ?? "" : "";
-
-                        var lines = new List<string>
-                        {
-                            $"Decision: {decision} (confidence: {conf}/100, horizon: {horizon}d)"
-                        };
-
-                        if (result.TryGetValue("why_bullets", out var whyEl) && whyEl.ValueKind == JsonValueKind.Array)
-                        {
-                            var why = whyEl.EnumerateArray()
-                                .Where(x => x.ValueKind == JsonValueKind.String)
-                                .Select(x => x.GetString())
-                                .Where(x => !string.IsNullOrWhiteSpace(x))
-                                .Take(3)
-                                .ToList();
-                            if (why.Count > 0)
-                            {
-                                lines.Add("Why:");
-                                lines.AddRange(why.Select(w => $"- {w}"));
-                            }
-                        }
-
-                        if (result.TryGetValue("action_plan", out var planEl) && planEl.ValueKind == JsonValueKind.Array)
-                        {
-                            var planLines = new List<string>();
-                            foreach (var item in planEl.EnumerateArray().Take(4))
-                            {
-                                if (item.ValueKind != JsonValueKind.Object) continue;
-                                var t = item.TryGetProperty("type", out var tEl) && tEl.ValueKind == JsonValueKind.String ? tEl.GetString() ?? "" : "";
-                                var r = item.TryGetProperty("rationale_short", out var rEl) && rEl.ValueKind == JsonValueKind.String ? rEl.GetString() ?? "" : "";
-                                if (!string.IsNullOrWhiteSpace(t) || !string.IsNullOrWhiteSpace(r))
-                                    planLines.Add($"- {t}: {r}".Trim());
-                            }
-                            if (planLines.Count > 0)
-                            {
-                                lines.Add("Action plan:");
-                                lines.AddRange(planLines);
-                            }
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(scenario))
-                            lines.Add($"Mentor scenario: {scenario}");
-                        if (!string.IsNullOrWhiteSpace(riskNote))
-                            lines.Add($"Risk note: {riskNote}");
-
-                        // If backend indicates missing/errors, surface it mentor-style
-                        if (result.TryGetValue("missing", out var missEl) && missEl.ValueKind == JsonValueKind.Array)
-                        {
-                            var miss = missEl.EnumerateArray()
-                                .Where(x => x.ValueKind == JsonValueKind.String)
-                                .Select(x => x.GetString())
-                                .Where(x => !string.IsNullOrWhiteSpace(x))
-                                .ToList();
-                            if (miss.Count > 0)
-                            {
-                                chatUnavailableReason = $"Chat unavailable: missing data ({string.Join(", ", miss)}).";
-                                lines.Add("");
-                                lines.Add("Note: Some context is missing, so the decision is conservative.");
-                            }
-                        }
-                        if (result.TryGetValue("errors", out var errEl) && errEl.ValueKind == JsonValueKind.Array)
-                        {
-                            var errs = errEl.EnumerateArray()
-                                .Where(x => x.ValueKind == JsonValueKind.String)
-                                .Select(x => x.GetString())
-                                .Where(x => !string.IsNullOrWhiteSpace(x))
-                                .ToList();
-                            if (errs.Count > 0)
-                            {
-                                chatUnavailableReason = $"Chat unavailable: {string.Join(", ", errs)}.";
-                            }
-                        }
-
-                        botResponse = string.Join("\n", lines);
-                    }
-                    
-                    if (result.ContainsKey("response"))
-                    {
-                        var responseElement = result["response"];
-                        if (responseElement.ValueKind == System.Text.Json.JsonValueKind.String)
-                        {
-                            botResponse = responseElement.GetString() ?? "Üzgünüm, cevap alınamadı.";
-                        }
-                    }
-                    else if (result.ContainsKey("error"))
-                    {
-                        var errorElement = result["error"];
-                        if (errorElement.ValueKind == System.Text.Json.JsonValueKind.String)
-                        {
-                            botResponse = $"Hata: {errorElement.GetString()}";
-                        }
-                    }
-                    
-                    messages.Add(new ChatMessage
-                    {
-                        Text = botResponse,
-                        Type = "bot",
-                        Time = DateTime.Now
-                    });
-                }
-                else
-                {
-                    messages.Add(new ChatMessage
-                    {
-                        Text = "Üzgünüm, bir hata oluştu.",
-                        Type = "bot",
-                        Time = DateTime.Now
-                    });
-                }
+                var respJson = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(respJson);
+                reply = doc.RootElement.TryGetProperty("reply", out var r)
+                    ? r.GetString() ?? "Cevap alınamadı."
+                    : "Cevap alınamadı.";
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                chatUnavailableReason = $"Backend replied HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).";
-                AgentLog(
-                    location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                    message: "Non-success HTTP response",
-                    data: new { status = (int)response.StatusCode, reason = response.ReasonPhrase, bodyFirst200 = errorContent.Substring(0, Math.Min(200, errorContent.Length)) },
-                    hypothesisId: "B"
-                );
-                messages.Add(new ChatMessage
-                {
-                    Text = $"Bağlantı hatası ({response.StatusCode}): {errorContent}",
-                    Type = "bot",
-                    Time = DateTime.Now
-                });
+                reply = $"Bağlantı hatası ({(int)response.StatusCode}).";
+                chatUnavailableReason = reply;
             }
+
+            messages.Add(new ChatMessage { Text = reply, Type = "bot", Role = "assistant", Time = DateTime.Now });
+
         }
         catch (Exception ex)
         {
-            chatUnavailableReason = $"Network/parse error: {ex.GetType().Name}: {ex.Message}";
-            AgentLog(
-                location: "BorsaAjani_Web/Components/ChatComponent.razor:SendMessage",
-                message: "SendMessage exception",
-                data: new { exType = ex.GetType().Name, ex.Message },
-                hypothesisId: "A"
-            );
-            messages.Add(new ChatMessage
-            {
-                Text = $"Hata: {ex.Message}",
-                Type = "bot",
-                Time = DateTime.Now
-            });
+            messages.Add(new ChatMessage { Text = $"Hata: {ex.Message}", Type = "bot", Role = "assistant", Time = DateTime.Now });
+            chatUnavailableReason = ex.Message;
         }
         finally
         {
