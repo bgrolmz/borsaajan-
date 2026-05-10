@@ -37,6 +37,16 @@ public class ChatContextService
         ContextChanged?.Invoke();
     }
     
+    /// <summary>
+    /// Store any rich context dict directly (e.g. from BuildMentorContext in HisseAnalizi).
+    /// Replaces SetStockContext for callers that already have a full context built.
+    /// </summary>
+    public void SetRichContext(Dictionary<string, object> ctx)
+    {
+        _currentContext = ctx;
+        ContextChanged?.Invoke();
+    }
+
     public void ClearContext()
     {
         _currentContext = null;

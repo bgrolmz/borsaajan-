@@ -6,9 +6,12 @@
 @using Microsoft.AspNetCore.Components.Web
 @using System.Net.Http.Json
 @using System.Text.Json
+@using Microsoft.JSInterop
 @inject FinansalAjanService Ajan
 @inject NavigationManager Nav
 @inject IHttpClientFactory HttpFactory
+@inject ChatContextService ContextService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Hisse Analizi — Borsa Ajanı</PageTitle>
 
@@ -447,12 +450,214 @@
         }
         else if (!isLoading)
         {
-            @* Empty state *@
-            <div style="text-align:center; padding:80px 0; font-family:var(--f-hand); color:var(--wf-ink-dim);">
-                <div style="font-size:32px; margin-bottom:12px;">◎</div>
-                <div style="font-size:18px; margin-bottom:6px;">Sembol gir, analizi başlat</div>
-                <div style="font-family:var(--f-mono); font-size:11px; color:var(--wf-ink-mute);">EV · Kelly · Bayes · Gemini AI yorumu</div>
-            </div>
+            @* ── Intelligence Feed ── *@
+            @if (haSelectedNews != null)
+            {
+                var dn = haSelectedNews;
+                var dnImpactLabel = dn.Sentiment == "bullish" ? "Positive" : dn.Sentiment == "bearish" ? "Negative" : "Neutral";
+                var dnImpactLevel = dn.Impact == "HIGH" ? "High" : dn.Impact == "MEDIUM" ? "Medium" : "Low";
+                var dnImpactBorder = dn.Sentiment == "bullish" ? "border-[#00FFA3]" : dn.Sentiment == "bearish" ? "border-[#ffb4ab]" : "border-[#b9cbbd]/20";
+                var dnImpactText = dn.Sentiment == "bullish" ? "text-[#00FFA3]" : dn.Sentiment == "bearish" ? "text-[#ffb4ab]" : "text-[#b9cbbd]/40";
+                var dnImpactBg = dn.Sentiment == "bullish" ? "bg-[#00FFA3]/10 text-[#00FFA3]" : dn.Sentiment == "bearish" ? "bg-[#ffb4ab]/10 text-[#ffb4ab]" : "bg-[#e2e2eb]/5 text-[#e2e2eb]/40";
+
+                <button class="flex items-center gap-2 group mb-6 text-[#e2e2eb]/60 hover:text-[#00FFA3] transition-colors" @onclick="() => { haSelectedNews = null; }">
+                    <span class="material-symbols-outlined text-lg">arrow_back</span>
+                    <span class="font-['Manrope'] text-xs uppercase tracking-widest">Haberlere Dön</span>
+                </button>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div class="lg:col-span-8 space-y-8">
+                        <section class="space-y-4">
+                            <div class="flex items-center gap-3">
+                                <span class="bg-[#00FFA3] text-[#003920] text-[10px] font-bold px-2 py-0.5 tracking-tighter uppercase">Market Impact: @dnImpactLevel</span>
+                                @if (dn.Symbols.Any())
+                                {
+                                    <span class="text-[#e2e2eb]/40 text-[10px] uppercase tracking-widest">Sector: @string.Join(" / ", dn.Symbols.Take(3))</span>
+                                }
+                            </div>
+                            <h1 class="font-['Manrope'] text-2xl lg:text-3xl font-extrabold leading-tight tracking-tight text-[#e2e2eb]">@dn.DisplayTitle</h1>
+                            <div class="flex items-center gap-4 py-3 border-y border-[#282a30]/50 text-[#e2e2eb]/40 text-xs uppercase">
+                                <span>@dn.Timestamp.ToString("dd MMM yyyy HH:mm")</span>
+                                <span>Analyst: Hermes AI</span>
+                            </div>
+                        </section>
+
+                        <section class="bg-[#191b22] p-6 border-l-4 border-[#00FFA3]">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="material-symbols-outlined text-[#00FFA3]">auto_awesome</span>
+                                <h3 class="font-['Manrope'] text-base font-bold uppercase tracking-tight">AI Intelligence Summary</h3>
+                            </div>
+                            <ul class="space-y-3">
+                                @if (!string.IsNullOrEmpty(dn.Reason))
+                                {
+                                    <li class="flex items-start gap-3">
+                                        <span class="mt-1.5 w-1.5 h-1.5 bg-[#00FFA3] shrink-0"></span>
+                                        <p class="text-[#e2e2eb]/80 leading-relaxed text-sm">@dn.Reason</p>
+                                    </li>
+                                }
+                                @if (!string.IsNullOrEmpty(dn.WhyAnalysis))
+                                {
+                                    <li class="flex items-start gap-3">
+                                        <span class="mt-1.5 w-1.5 h-1.5 bg-[#00FFA3] shrink-0"></span>
+                                        <p class="text-[#e2e2eb]/80 leading-relaxed text-sm">@dn.WhyAnalysis</p>
+                                    </li>
+                                }
+                            </ul>
+                        </section>
+
+                        @if (!string.IsNullOrEmpty(dn.Summary))
+                        {
+                            <p class="text-sm leading-relaxed text-[#e2e2eb]/80">@dn.Summary</p>
+                        }
+                    </div>
+
+                    <div class="lg:col-span-4 space-y-6">
+                        <section class="bg-[#191b22] p-5 border border-[#282a30]">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-['Manrope'] text-sm font-bold uppercase tracking-widest text-[#e2e2eb]">Asset Impact</h3>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-1.5 h-1.5 bg-[#00FFA3] animate-pulse"></div>
+                                    <span class="text-[9px] uppercase text-[#00FFA3]">Live</span>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                @foreach (var sym in (dn.Symbols.Any() ? dn.Symbols.Take(4) : new List<string> { "MARKET" }))
+                                {
+                                    <div class="bg-[#0c0e14] p-3 @dnImpactBorder border-l-2">
+                                        <div class="flex justify-between items-start mb-1">
+                                            <span class="font-bold @dnImpactText">@sym</span>
+                                            <span class="text-[10px] px-1.5 py-0.5 @dnImpactBg">@dnImpactLabel.ToUpper()</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+
+                        @if (haNewsItems.Count > 1)
+                        {
+                            <section class="space-y-3">
+                                <h3 class="font-['Manrope'] text-xs font-bold uppercase tracking-widest text-[#e2e2eb]/60">Related Signals</h3>
+                                @foreach (var related in haNewsItems.Where(n => n.Id != dn.Id).Take(3))
+                                {
+                                    var relSentiment = related.Sentiment == "bullish" ? "POSITIVE" : related.Sentiment == "bearish" ? "NEGATIVE" : "NEUTRAL";
+                                    var relSignalColor = related.Sentiment == "bullish" ? "text-[#00FFA3]" : related.Sentiment == "bearish" ? "text-[#ffb4ab]" : "text-[#e2e2eb]/40";
+                                    <div class="bg-[#0c0e14] p-3 border border-[#282a30]/50 hover:border-[#00FFA3]/30 cursor-pointer transition-all" @onclick="() => haSelectedNews = related">
+                                        <h4 class="text-xs font-medium leading-tight hover:text-[#00FFA3] mb-1">@(related.DisplayTitle.Length > 60 ? related.DisplayTitle[..60] + "…" : related.DisplayTitle)</h4>
+                                        <div class="flex justify-between items-center text-[10px]">
+                                            <span class="@relSignalColor">@relSentiment</span>
+                                            <span class="text-[#e2e2eb]/20">@related.TimeAgo</span>
+                                        </div>
+                                    </div>
+                                }
+                            </section>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* Feed header *@
+                <div class="mb-6 flex justify-between items-end border-b border-[#3a4a3f]/20 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold font-['Manrope'] tracking-tighter text-[#e2e2eb] mb-1">INTELLIGENCE FEED</h2>
+                        <p class="text-xs uppercase tracking-[0.3em] text-[#b9cbbd]/60">Cross-Asset Neural Analysis</p>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] uppercase tracking-widest text-[#b9cbbd]">System Status</div>
+                        <div class="text-[#00FFA3] font-bold">@(isLoadingNews ? "SYNCING..." : "OPTIMIZED")</div>
+                    </div>
+                </div>
+
+                @* Filter bar *@
+                @if (haNewsItems.Count > 0)
+                {
+                    var haUnread = haNewsItems.Count(n => !haReadNewsIds.Contains(n.Id));
+                    <div class="mb-4 p-3 bg-[#0c0e14] border border-[#282a30]/40 flex flex-wrap gap-2 items-center text-xs uppercase">
+                        <div class="flex gap-0">
+                            @foreach (var f in new[] { ("ALL", "Tümü"), ("bullish", "▲ Pozitif"), ("bearish", "▼ Negatif"), ("neutral", "Nötr") })
+                            {
+                                var isAct = haNewsSentimentFilter == f.Item1;
+                                <button @onclick="@(() => haNewsSentimentFilter = f.Item1)"
+                                        class="@(isAct ? "bg-[#00FFA3] text-[#003920]" : "bg-[#191b22] text-[#b9cbbd]/60 hover:text-[#00FFA3]") px-2 py-1 border border-[#282a30] tracking-tighter text-[10px]">
+                                    @f.Item2
+                                </button>
+                            }
+                        </div>
+                        <input @bind="haNewsSymbolFilter" @bind:event="oninput" placeholder="🔍 Sembol veya başlık"
+                               class="bg-[#191b22] border border-[#282a30] text-[#e2e2eb] px-2 py-1 flex-1 min-w-[120px] tracking-tighter placeholder:text-[#b9cbbd]/30 text-[10px]" />
+                        @if (haUnread > 0)
+                        {
+                            <button @onclick="HaMarkAllRead" class="bg-[#191b22] text-[#00FFA3] hover:bg-[#00FFA3] hover:text-[#003920] px-2 py-1 border border-[#00FFA3]/30 tracking-tighter text-[10px]">
+                                ✓ Tümünü oku (@haUnread)
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (isLoadingNews)
+                {
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[#282a30]/20 border border-[#282a30]/20">
+                        @for (int i = 0; i < 6; i++)
+                        {
+                            <div class="bg-[#1e1f26] p-6 animate-pulse" style="height: 200px;"></div>
+                        }
+                    </div>
+                }
+                else if (haNewsItems.Count == 0)
+                {
+                    <div class="flex flex-col items-center justify-center py-16 text-center">
+                        <span class="material-symbols-outlined text-5xl text-[#b9cbbd]/20 mb-4">article</span>
+                        <h3 class="text-base font-bold uppercase tracking-widest text-[#b9cbbd]/40 mb-2">No Intelligence Available</h3>
+                        <p class="text-xs text-[#b9cbbd]/30 uppercase tracking-widest">Yeni haberler geldiğinde burada görünecek.</p>
+                    </div>
+                }
+                else
+                {
+                    var haFiltered = HaFilterNews(haNewsItems);
+                    <div class="text-[10px] text-[#b9cbbd]/40 uppercase tracking-widest mb-3">@haFiltered.Count / @haNewsItems.Count haber</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-[#282a30]/20 border border-[#282a30]/20">
+                        @foreach (var news in haFiltered)
+                        {
+                            var isRead = haReadNewsIds.Contains(news.Id);
+                            var impactBgClass = news.Sentiment == "bullish"
+                                ? "bg-[#00FFA3] text-[#003920]"
+                                : news.Sentiment == "bearish"
+                                    ? "bg-[#93000a]/30 text-[#ffb4ab]"
+                                    : "bg-[#282a30] text-[#b9cbbd]";
+                            var impactLabel = news.Sentiment == "bullish" ? "Positive" : news.Sentiment == "bearish" ? "Negative" : "Neutral";
+
+                            <div class="@(isRead ? "bg-[#15161c] opacity-60" : "bg-[#1e1f26]") p-5 hover:bg-[#282a30] hover:opacity-100 transition-all cursor-pointer flex flex-col gap-3 relative" @onclick="@(() => HaOpenNewsItem(news))">
+                                @if (!isRead)
+                                {
+                                    <span class="absolute top-2 right-2 w-2 h-2 bg-[#00FFA3] rounded-full"></span>
+                                }
+                                <div class="flex justify-between items-start">
+                                    <span class="text-[10px] text-[#b9cbbd]/60">@news.TimeAgo</span>
+                                    <span class="text-[9px] @impactBgClass px-1.5 py-0.5 font-bold uppercase tracking-tighter">@impactLabel</span>
+                                </div>
+                                <h3 class="text-sm font-bold leading-snug hover:text-[#00FFA3] transition-colors">@news.DisplayTitle</h3>
+                                @if (news.Symbols.Any())
+                                {
+                                    <div class="flex flex-wrap gap-1">
+                                        @foreach (var sym in news.Symbols.Take(4))
+                                        {
+                                            <span class="text-[9px] bg-[#191b22] border border-[#3a4a3f]/30 text-[#00FFA3] px-1.5 py-0.5 font-bold uppercase">@sym</span>
+                                        }
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(news.Reason))
+                                {
+                                    <p class="text-xs text-[#b9cbbd]/70 leading-relaxed line-clamp-3">@news.Reason</p>
+                                }
+                                else if (!string.IsNullOrEmpty(news.Summary))
+                                {
+                                    <p class="text-xs text-[#b9cbbd]/70 leading-relaxed line-clamp-3">@news.Summary</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
         }
 
     </main>
@@ -604,6 +809,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadIntelligenceFeed();
+        await HaLoadReadIds();
         if (!string.IsNullOrWhiteSpace(Symbol))
         {
             symbolInput = Symbol.ToUpper();
@@ -649,6 +856,9 @@
 
         isLoading = false;
         StateHasChanged();
+
+        if (result != null && result.Success)
+            ContextService.SetRichContext(BuildMentorContext());
 
         if (result != null && result.Success && string.IsNullOrEmpty(result.AiCommentary))
             _ = GenerateAiCommentaryAsync();
@@ -848,6 +1058,169 @@
         finally
         {
             isMentorLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Intelligence Feed ──
+    private bool isLoadingNews = false;
+    private List<HaNewsItem> haNewsItems = new();
+    private HaNewsItem? haSelectedNews = null;
+    private string haNewsSentimentFilter = "ALL";
+    private string haNewsImpactFilter = "ALL";
+    private string haNewsSymbolFilter = "";
+    private bool haNewsShowOnlyUnread = false;
+    private HashSet<int> haReadNewsIds = new();
+
+    private class HaPastOutcome
+    {
+        public string Title { get; set; } = "";
+        public string ExpectedImpact { get; set; } = "";
+        public string? ActualImpact { get; set; }
+        public double? PriceChangePct { get; set; }
+        public string CreatedAt { get; set; } = "";
+    }
+
+    private class HaNewsItem
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string TitleTr { get; set; } = "";
+        public string DisplayTitle => !string.IsNullOrEmpty(TitleTr) ? TitleTr : Title;
+        public string Summary { get; set; } = "";
+        public string WhyAnalysis { get; set; } = "";
+        public string Impact { get; set; } = "LOW";
+        public string Sentiment { get; set; } = "neutral";
+        public string Reason { get; set; } = "";
+        public int Confidence { get; set; } = 0;
+        public string TimeHorizon { get; set; } = "";
+        public List<string> Symbols { get; set; } = new();
+        public List<HaPastOutcome> PastOutcomes { get; set; } = new();
+        public DateTime Timestamp { get; set; }
+        public string TimeAgo
+        {
+            get
+            {
+                var diff = DateTime.Now - Timestamp;
+                if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}d önce";
+                if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}s önce";
+                return $"{(int)diff.TotalDays}g önce";
+            }
+        }
+    }
+
+    private List<HaNewsItem> HaFilterNews(List<HaNewsItem> src)
+    {
+        IEnumerable<HaNewsItem> q = src;
+        if (haNewsSentimentFilter != "ALL")
+            q = q.Where(n => string.Equals(n.Sentiment, haNewsSentimentFilter, StringComparison.OrdinalIgnoreCase));
+        if (haNewsImpactFilter != "ALL")
+            q = q.Where(n => string.Equals(n.Impact, haNewsImpactFilter, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(haNewsSymbolFilter))
+        {
+            var s = haNewsSymbolFilter.Trim();
+            q = q.Where(n =>
+                n.Symbols.Any(sy => sy.Contains(s, StringComparison.OrdinalIgnoreCase)) ||
+                n.Title.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                n.TitleTr.Contains(s, StringComparison.OrdinalIgnoreCase));
+        }
+        if (haNewsShowOnlyUnread)
+            q = q.Where(n => !haReadNewsIds.Contains(n.Id));
+        return q.OrderByDescending(n => n.Timestamp).ToList();
+    }
+
+    private async Task HaOpenNewsItem(HaNewsItem n)
+    {
+        haSelectedNews = n;
+        haReadNewsIds.Add(n.Id);
+        await HaSaveReadIds();
+    }
+
+    private async Task HaMarkAllRead()
+    {
+        foreach (var n in haNewsItems) haReadNewsIds.Add(n.Id);
+        await HaSaveReadIds();
+    }
+
+    private async Task HaLoadReadIds()
+    {
+        try
+        {
+            var json = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "ha_read_news");
+            if (!string.IsNullOrEmpty(json))
+            {
+                var arr = System.Text.Json.JsonSerializer.Deserialize<int[]>(json);
+                if (arr != null) haReadNewsIds = new HashSet<int>(arr);
+            }
+        }
+        catch { }
+    }
+
+    private async Task HaSaveReadIds()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(haReadNewsIds.ToArray());
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "ha_read_news", json);
+        }
+        catch { }
+    }
+
+    private async Task LoadIntelligenceFeed()
+    {
+        isLoadingNews = true;
+        haNewsItems.Clear();
+        StateHasChanged();
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var historyResp = await client.GetAsync("/news/history/all?limit=50");
+            if (historyResp.IsSuccessStatusCode)
+            {
+                var histJson = await historyResp.Content.ReadAsStringAsync();
+                using var doc = System.Text.Json.JsonDocument.Parse(histJson);
+                if (doc.RootElement.TryGetProperty("items", out var items))
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        var ni = new HaNewsItem
+                        {
+                            Id = item.TryGetProperty("id", out var idp) ? idp.GetInt32() : haNewsItems.Count + 1,
+                            Title = item.TryGetProperty("title", out var tp) ? tp.GetString() ?? "" : "",
+                            TitleTr = item.TryGetProperty("title_tr", out var ttrp) ? ttrp.GetString() ?? "" : "",
+                            Summary = item.TryGetProperty("summary", out var sp) ? sp.GetString() ?? "" : "",
+                            WhyAnalysis = item.TryGetProperty("why_analysis", out var wap) ? wap.GetString() ?? "" : "",
+                            Impact = item.TryGetProperty("impact", out var imp) ? imp.GetString() ?? "LOW" : "LOW",
+                            Sentiment = item.TryGetProperty("sentiment", out var sentp) ? sentp.GetString() ?? "neutral" : "neutral",
+                            Reason = item.TryGetProperty("reason", out var rp) ? rp.GetString() ?? "" : "",
+                            Confidence = item.TryGetProperty("confidence", out var cp) ? (int)(cp.GetDouble()) : 0,
+                            TimeHorizon = item.TryGetProperty("time_horizon", out var thp) ? thp.GetString() ?? "" : "",
+                            Timestamp = item.TryGetProperty("created_at", out var catp) && DateTime.TryParse(catp.GetString(), out var dt) ? dt : DateTime.Now,
+                        };
+                        if (item.TryGetProperty("symbols", out var syms) && syms.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            ni.Symbols = syms.EnumerateArray().Select(s => s.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList();
+                        if (item.TryGetProperty("past_outcomes", out var pos) && pos.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var po in pos.EnumerateArray())
+                            {
+                                ni.PastOutcomes.Add(new HaPastOutcome
+                                {
+                                    Title = po.TryGetProperty("title", out var pot) ? pot.GetString() ?? "" : "",
+                                    ExpectedImpact = po.TryGetProperty("expected_impact", out var poe) ? poe.GetString() ?? "" : "",
+                                    ActualImpact = po.TryGetProperty("actual_impact", out var poa) ? poa.GetString() : null,
+                                    PriceChangePct = po.TryGetProperty("price_change_pct", out var pop) && pop.ValueKind != System.Text.Json.JsonValueKind.Null ? pop.GetDouble() : null,
+                                });
+                            }
+                        }
+                        haNewsItems.Add(ni);
+                    }
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            isLoadingNews = false;
             StateHasChanged();
         }
     }
