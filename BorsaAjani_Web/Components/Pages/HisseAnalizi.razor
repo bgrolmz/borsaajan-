@@ -16,7 +16,7 @@
 
 <PageTitle>Hisse Analizi — Borsa Ajanı</PageTitle>
 
-<div class="ha-shell">
+<div class="ha-shell no-mentor">
 
     @* ── Sidebar ── *@
     <nav class="ha-sidebar">
@@ -557,6 +557,108 @@
             }
             else
             {
+                @* ── Dashboard: günlük rapor + portföy ── *@
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-px bg-[#282a30]/20 border border-[#282a30]/20 mb-8">
+                    @* Market Overview *@
+                    <div class="lg:col-span-2 bg-[#1e1f26] p-5">
+                        <div class="flex justify-between items-end mb-4">
+                            <div>
+                                <h3 class="text-base font-extrabold font-['Manrope'] tracking-tighter text-[#e2e2eb]">PİYASA RAPORU</h3>
+                                <p class="text-[10px] uppercase tracking-[0.25em] text-[#b9cbbd]/60">Endeksler · @DateTime.Now.ToString("dd MMM yyyy")</p>
+                            </div>
+                            <div class="text-[#00FFA3] text-[10px] uppercase tracking-widest">
+                                @(isLoadingMarket ? "SYNCING..." : "LIVE")
+                            </div>
+                        </div>
+                        @if (isLoadingMarket)
+                        {
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                @for (int i = 0; i < 5; i++)
+                                {
+                                    <div class="bg-[#0c0e14] p-3 animate-pulse" style="height:70px;"></div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                                @foreach (var idx in marketIndices)
+                                {
+                                    var posClass = idx.ChangePct >= 0 ? "text-[#00FFA3]" : "text-[#ffb4ab]";
+                                    var arrow = idx.ChangePct >= 0 ? "▲" : "▼";
+                                    <div class="bg-[#0c0e14] p-3 border-l-2 @(idx.ChangePct >= 0 ? "border-[#00FFA3]" : "border-[#ffb4ab]")">
+                                        <div class="text-[9px] uppercase tracking-widest text-[#b9cbbd]/60">@idx.Name</div>
+                                        <div class="text-base font-bold text-[#e2e2eb] mt-1">@idx.Current.ToString("N2")</div>
+                                        <div class="text-[10px] @posClass font-bold">@arrow @idx.ChangePct.ToString("F2")%</div>
+                                    </div>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(marketAiSummary))
+                            {
+                                <div class="bg-[#0c0e14] p-3 border-l-2 border-[#00FFA3]">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="material-symbols-outlined text-[#00FFA3]" style="font-size:14px;">auto_awesome</span>
+                                        <span class="text-[9px] uppercase tracking-widest text-[#00FFA3]">AI Günlük Yorum</span>
+                                    </div>
+                                    <p class="text-xs text-[#e2e2eb]/80 leading-relaxed">@marketAiSummary</p>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    @* Paper Portfolio *@
+                    <div class="bg-[#1e1f26] p-5">
+                        <div class="flex justify-between items-end mb-4">
+                            <div>
+                                <h3 class="text-base font-extrabold font-['Manrope'] tracking-tighter text-[#e2e2eb]">PORTFÖYÜM</h3>
+                                <p class="text-[10px] uppercase tracking-[0.25em] text-[#b9cbbd]/60">Paper Trading · Simüle</p>
+                            </div>
+                            <a href="/paper-trading" class="text-[#00FFA3] text-[10px] uppercase tracking-widest hover:underline">Detay →</a>
+                        </div>
+                        @if (dashPortfolio == null)
+                        {
+                            <div class="bg-[#0c0e14] p-3 animate-pulse" style="height:120px;"></div>
+                        }
+                        else
+                        {
+                            var totalPnl = dashPortfolio.Positions?.Sum(p => p.Pnl) ?? 0;
+                            var pnlColor = totalPnl >= 0 ? "text-[#00FFA3]" : "text-[#ffb4ab]";
+                            <div class="grid grid-cols-2 gap-2 mb-3">
+                                <div class="bg-[#0c0e14] p-2">
+                                    <div class="text-[9px] uppercase tracking-widest text-[#b9cbbd]/60">Toplam Eşdeğer</div>
+                                    <div class="text-lg font-bold text-[#e2e2eb]">$@dashPortfolio.TotalEquity.ToString("N0")</div>
+                                </div>
+                                <div class="bg-[#0c0e14] p-2">
+                                    <div class="text-[9px] uppercase tracking-widest text-[#b9cbbd]/60">Nakit</div>
+                                    <div class="text-lg font-bold text-[#e2e2eb]">$@dashPortfolio.Cash.ToString("N0")</div>
+                                </div>
+                            </div>
+                            <div class="bg-[#0c0e14] p-2 mb-3 border-l-2 @(totalPnl >= 0 ? "border-[#00FFA3]" : "border-[#ffb4ab]")">
+                                <div class="text-[9px] uppercase tracking-widest text-[#b9cbbd]/60">Açık P&L</div>
+                                <div class="text-base font-bold @pnlColor">@(totalPnl >= 0 ? "+" : "")$@totalPnl.ToString("N2")</div>
+                            </div>
+                            @if (dashPortfolio.Positions?.Any() == true)
+                            {
+                                <div class="space-y-1">
+                                    @foreach (var pos in dashPortfolio.Positions.Take(3))
+                                    {
+                                        var posClass2 = pos.Pnl >= 0 ? "text-[#00FFA3]" : "text-[#ffb4ab]";
+                                        <div class="flex justify-between items-center bg-[#0c0e14] px-2 py-1.5">
+                                            <span class="text-xs font-bold text-[#e2e2eb]">@pos.Symbol</span>
+                                            <span class="text-[10px] text-[#b9cbbd]/60">@pos.Shares.ToString("F0")x</span>
+                                            <span class="text-xs font-bold @posClass2">@(pos.Pnl >= 0 ? "+" : "")$@pos.Pnl.ToString("F2")</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-[10px] text-[#b9cbbd]/40 uppercase tracking-widest text-center py-3">Henüz pozisyon yok</p>
+                            }
+                        }
+                    </div>
+                </div>
+
                 @* Feed header *@
                 <div class="mb-6 flex justify-between items-end border-b border-[#3a4a3f]/20 pb-4">
                     <div>
@@ -662,122 +764,6 @@
         }
 
     </main>
-
-    @* ── Mentor Panel ── *@
-    <aside class="ha-mentor-col">
-        <div class="mentor-card">
-            <div class="mentor-head">
-                <div class="mentor-avatar">M</div>
-                <div class="sk-stack" style="flex:1;">
-                    <div class="mentor-name">Mentor · Doğa</div>
-                    <div class="mentor-role">KUANTİTATİF ANALİST</div>
-                </div>
-                <span class="sk-tag" style="color:var(--wf-mentor);">● online</span>
-            </div>
-            <div class="mentor-stream">
-                @if (!mentorMessages.Any())
-                {
-                    @if (result != null && result.Success)
-                    {
-                        var ev = result.Ev?.Value ?? 0;
-                        var kf = result.Kelly?.QuarterPct ?? 0;
-                        <div class="mentor-bubble">
-                            @if (ev > 0)
-                            {
-                                <b style="color:var(--wf-mentor);">EV pozitif (+$@(ev.ToString("F2")))</b>
-                            }
-                            else
-                            {
-                                <b style="color:var(--wf-sell);">EV negatif ($@(ev.ToString("F2")))</b>
-                            }
-                            @if (kf > 0)
-                            {
-                                <span> · Kelly fraction <b>%@(kf.ToString("F1"))</b> — pozisyon buna göre ayarla.</span>
-                            }
-                        </div>
-                        <div class="mentor-bubble" style="color:var(--wf-ink-mute); font-size:12px;">
-                            Analiz hazır. Aşağıdan soru sor veya konuya göre chip'e tıkla.
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="mentor-bubble">
-                            Merhaba! Bir sembol analiz et, sonra bana istediğini sor.<br/>
-                            <span style="color:var(--wf-ink-mute); font-size:12px;">Bağımsız çalışıyorum — analiz beklemeden de soru sorabilirsin.</span>
-                        </div>
-                    }
-                }
-                @foreach (var msg in mentorMessages)
-                {
-                    @if (msg.IsUser)
-                    {
-                        <div class="mentor-bubble" style="background:var(--wf-buy-soft); color:var(--wf-buy); text-align:right; margin-left:12px;">
-                            @msg.Text
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="mentor-bubble">
-                            @msg.Text
-                        </div>
-                    }
-                }
-                @if (isMentorLoading)
-                {
-                    <div class="mentor-bubble" style="color:var(--wf-ink-mute);">
-                        <span style="font-family:var(--f-mono); font-size:11px;">⏳ Mentor düşünüyor…</span>
-                    </div>
-                }
-            </div>
-            <div class="mentor-suggested">
-                <span class="wf-chip" @onclick='() => SendChip("Neden Kelly düşük?")'>Neden Kelly düşük?</span>
-                <span class="wf-chip" @onclick='() => SendChip("EV nasıl hesaplandı?")'>EV nasıl hesaplandı?</span>
-                <span class="wf-chip" @onclick='() => SendChip("Risk planı öner")'>Risk planı öner</span>
-            </div>
-            <div class="mentor-input-row" style="display:flex; gap:6px; align-items:center;">
-                <input @bind="mentorInput" @bind:event="oninput" @onkeydown="HandleMentorKey"
-                       placeholder="Mentor'a sor…"
-                       style="flex:1; background:transparent; border:none; font-family:var(--f-hand); font-size:13px; color:var(--wf-ink); outline:none;"
-                       disabled="@isMentorLoading" />
-                <button @onclick="SendMentorMessage" disabled="@(isMentorLoading || string.IsNullOrWhiteSpace(mentorInput))"
-                        style="background:var(--wf-mentor); color:#000; border:none; border-radius:4px; padding:4px 10px; font-family:var(--f-hand); font-size:12px; cursor:pointer; opacity:@(isMentorLoading || string.IsNullOrWhiteSpace(mentorInput) ? "0.4" : "1");">
-                    ↑
-                </button>
-            </div>
-        </div>
-
-        @* Paper portfolio mini özet *@
-        @if (portfolio != null)
-        {
-            <div class="sk-card dashed" style="margin-top:4px;">
-                <div class="sk-card-h">
-                    <span class="sk-h-title">Paper Portfolio</span>
-                    <span class="sk-h-meta">simüle</span>
-                </div>
-                <div class="sk-row-between" style="margin-bottom:6px;">
-                    <span class="sk-tag">Toplam</span>
-                    <span class="sk-num sk-num-md" style="color:var(--wf-mentor);">$@portfolio.TotalEquity.ToString("F0")</span>
-                </div>
-                <div class="sk-row-between">
-                    <span class="sk-tag">Nakit</span>
-                    <span class="sk-num sk-num-sm">$@portfolio.Cash.ToString("F0")</span>
-                </div>
-                @if (portfolio.Positions?.Any() == true)
-                {
-                    <div class="sk-divider"></div>
-                    @foreach (var pos in portfolio.Positions.Take(4))
-                    {
-                        <div class="sk-row-between" style="margin-top:4px;">
-                            <span class="sk-tag" style="color:var(--wf-ink);">@pos.Symbol</span>
-                            <span class="sk-num sk-num-sm" style="color:@(pos.Pnl >= 0 ? "var(--wf-buy)" : "var(--wf-sell)");">
-                                @(pos.Pnl >= 0 ? "+" : "")$@(pos.Pnl.ToString("F0"))
-                            </span>
-                        </div>
-                    }
-                }
-            </div>
-        }
-    </aside>
 </div>
 
 @code {
@@ -802,7 +788,14 @@
     private bool tradeSuccess;
     private bool isAddingWatch = false;
 
-    // Mentor chat
+    // Dashboard state
+    private class MarketIndex { public string Name {get;set;}=""; public double Current {get;set;} public double ChangePct {get;set;} }
+    private List<MarketIndex> marketIndices = new();
+    private string marketAiSummary = "";
+    private bool isLoadingMarket = true;
+    private PaperPortfolio? dashPortfolio;
+
+    // Mentor chat (legacy state — kept for API compat with BuildMentorContext / global FAB)
     private record MentorMessage(string Text, bool IsUser);
     private List<MentorMessage> mentorMessages = new();
     private string mentorInput = "";
@@ -810,6 +803,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _ = LoadMarketOverview();
+        _ = LoadDashPortfolio();
         await LoadIntelligenceFeed();
         await HaLoadReadIds();
         if (!string.IsNullOrWhiteSpace(Symbol))
@@ -1268,6 +1263,53 @@
             }
         }
         catch { }
+    }
+
+    private async Task LoadMarketOverview()
+    {
+        isLoadingMarket = true;
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var resp = await client.GetAsync("/market/overview");
+            if (!resp.IsSuccessStatusCode) return;
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            marketIndices.Clear();
+            if (root.TryGetProperty("market_data", out var md))
+            {
+                foreach (var prop in md.EnumerateObject())
+                {
+                    var name = prop.Name;
+                    var cur = prop.Value.TryGetProperty("current", out var c) ? c.GetDouble() : 0;
+                    var pct = prop.Value.TryGetProperty("change_pct", out var p) ? p.GetDouble() : 0;
+                    marketIndices.Add(new MarketIndex { Name = name, Current = cur, ChangePct = pct });
+                }
+            }
+            if (root.TryGetProperty("vix", out var vixEl) && vixEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                marketIndices.Add(new MarketIndex { Name = "VIX", Current = vixEl.GetDouble(), ChangePct = 0 });
+            if (root.TryGetProperty("dxy", out var dxyEl) && dxyEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                marketIndices.Add(new MarketIndex { Name = "DXY", Current = dxyEl.GetDouble(), ChangePct = 0 });
+            if (root.TryGetProperty("ai_summary", out var aiEl) && aiEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                marketAiSummary = aiEl.GetString() ?? "";
+        }
+        catch (Exception ex) { Console.WriteLine($"Market overview error: {ex.Message}"); }
+        finally
+        {
+            isLoadingMarket = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadDashPortfolio()
+    {
+        try
+        {
+            dashPortfolio = await Ajan.GetPortfolioAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex) { Console.WriteLine($"Dash portfolio error: {ex.Message}"); }
     }
 }
 
