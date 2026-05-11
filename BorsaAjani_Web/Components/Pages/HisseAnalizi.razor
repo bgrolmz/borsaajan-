@@ -1,3 +1,4 @@
+@page "/"
 @page "/hisse-analizi"
 @page "/hisse-analizi/{Symbol}"
 @rendermode InteractiveServer
@@ -1179,50 +1180,94 @@
             {
                 var histJson = await historyResp.Content.ReadAsStringAsync();
                 using var doc = System.Text.Json.JsonDocument.Parse(histJson);
-                if (doc.RootElement.TryGetProperty("items", out var items))
+                // Backend returns { "history": [...] }, Home.razor uses same parsing
+                if (doc.RootElement.TryGetProperty("history", out var items))
                 {
                     foreach (var item in items.EnumerateArray())
                     {
+                        var impactRaw = item.TryGetProperty("impact", out var imp) ? imp.GetString() ?? "" : "";
+                        var impactUpper = impactRaw.ToUpper();
+                        string impact = impactUpper switch
+                        {
+                            "POSITIVE" or "BULLISH" => "HIGH",
+                            "NEGATIVE" or "BEARISH" => "MEDIUM",
+                            _ => "LOW"
+                        };
+                        string sentiment = impactUpper switch
+                        {
+                            "POSITIVE" or "BULLISH" => "bullish",
+                            "NEGATIVE" or "BEARISH" => "bearish",
+                            _ => "neutral"
+                        };
+                        int conf = 0;
+                        if (item.TryGetProperty("confidence", out var confEl) && confEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            conf = confEl.GetInt32();
+
+                        var sym = item.TryGetProperty("symbol", out var symEl) ? symEl.GetString() ?? "" : "";
+
                         var ni = new HaNewsItem
                         {
-                            Id = item.TryGetProperty("id", out var idp) ? idp.GetInt32() : haNewsItems.Count + 1,
-                            Title = item.TryGetProperty("title", out var tp) ? tp.GetString() ?? "" : "",
-                            TitleTr = item.TryGetProperty("title_tr", out var ttrp) ? ttrp.GetString() ?? "" : "",
-                            Summary = item.TryGetProperty("summary", out var sp) ? sp.GetString() ?? "" : "",
-                            WhyAnalysis = item.TryGetProperty("why_analysis", out var wap) ? wap.GetString() ?? "" : "",
-                            Impact = item.TryGetProperty("impact", out var imp) ? imp.GetString() ?? "LOW" : "LOW",
-                            Sentiment = item.TryGetProperty("sentiment", out var sentp) ? sentp.GetString() ?? "neutral" : "neutral",
-                            Reason = item.TryGetProperty("reason", out var rp) ? rp.GetString() ?? "" : "",
-                            Confidence = item.TryGetProperty("confidence", out var cp) ? (int)(cp.GetDouble()) : 0,
-                            TimeHorizon = item.TryGetProperty("time_horizon", out var thp) ? thp.GetString() ?? "" : "",
-                            Timestamp = item.TryGetProperty("created_at", out var catp) && DateTime.TryParse(catp.GetString(), out var dt) ? dt : DateTime.Now,
+                            Id = item.TryGetProperty("id", out var nid) ? nid.GetInt32() : haNewsItems.Count + 1,
+                            Title = item.TryGetProperty("title", out var title) ? title.GetString() ?? "" : "",
+                            TitleTr = item.TryGetProperty("title_tr", out var ttr) ? ttr.GetString() ?? "" : "",
+                            Reason = item.TryGetProperty("reason", out var reason) ? reason.GetString() ?? "" : "",
+                            WhyAnalysis = item.TryGetProperty("comment", out var cmt) ? cmt.GetString() ?? "" : "",
+                            Summary = item.TryGetProperty("advice", out var adv) ? adv.GetString() ?? "" : "",
+                            Impact = impact,
+                            Sentiment = sentiment,
+                            Confidence = conf,
+                            TimeHorizon = item.TryGetProperty("time_horizon", out var th) ? th.GetString() ?? "" : "",
+                            Symbols = !string.IsNullOrEmpty(sym) ? new List<string> { sym } : new List<string>(),
+                            Timestamp = item.TryGetProperty("created_at", out var ts) && DateTime.TryParse(ts.GetString(), out var dt)
+                                ? dt : DateTime.Now.AddMinutes(-60)
                         };
-                        if (item.TryGetProperty("symbols", out var syms) && syms.ValueKind == System.Text.Json.JsonValueKind.Array)
-                            ni.Symbols = syms.EnumerateArray().Select(s => s.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList();
-                        if (item.TryGetProperty("past_outcomes", out var pos) && pos.ValueKind == System.Text.Json.JsonValueKind.Array)
-                        {
-                            foreach (var po in pos.EnumerateArray())
-                            {
-                                ni.PastOutcomes.Add(new HaPastOutcome
-                                {
-                                    Title = po.TryGetProperty("title", out var pot) ? pot.GetString() ?? "" : "",
-                                    ExpectedImpact = po.TryGetProperty("expected_impact", out var poe) ? poe.GetString() ?? "" : "",
-                                    ActualImpact = po.TryGetProperty("actual_impact", out var poa) ? poa.GetString() : null,
-                                    PriceChangePct = po.TryGetProperty("price_change_pct", out var pop) && pop.ValueKind != System.Text.Json.JsonValueKind.Null ? pop.GetDouble() : null,
-                                });
-                            }
-                        }
                         haNewsItems.Add(ni);
                     }
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Intelligence feed load error: {ex.Message}");
+        }
         finally
         {
             isLoadingNews = false;
             StateHasChanged();
+            if (haNewsItems.Any())
+                _ = TranslateHaNewsItemsAsync();
         }
+    }
+
+    private async Task TranslateHaNewsItemsAsync()
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient("BackendApi");
+            var titles = haNewsItems.Where(n => string.IsNullOrEmpty(n.TitleTr))
+                .Select(n => n.Title).Where(t => !string.IsNullOrEmpty(t)).Distinct().Take(15).ToList();
+            if (!titles.Any()) return;
+            var body = System.Text.Json.JsonSerializer.Serialize(new { titles });
+            var content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "application/json");
+            var resp = await client.PostAsync("/news/translate", content);
+            if (!resp.IsSuccessStatusCode) return;
+            var json = await resp.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("translations", out var translations))
+            {
+                foreach (var item in haNewsItems.Where(n => string.IsNullOrEmpty(n.TitleTr)))
+                {
+                    if (translations.TryGetProperty(item.Title, out var tr) && tr.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var trText = tr.GetString();
+                        if (!string.IsNullOrEmpty(trText))
+                            item.TitleTr = trText;
+                    }
+                }
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { }
     }
 }
 
